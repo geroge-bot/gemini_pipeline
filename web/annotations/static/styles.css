@@ -195,7 +195,7 @@ main {
   align-items: center;
 }
 
-.workHeader.inTopbar > div:not(.pager):not(.statsActions) {
+.workHeader.inTopbar > div:not(.pager):not(.statsActions):not(.workHeaderActions) {
   min-width: 0;
   text-align: center;
 }
@@ -209,9 +209,16 @@ main {
 }
 
 .workHeader.inTopbar > .statsActions,
+.workHeader.inTopbar > .workHeaderActions,
 .workHeader.inTopbar > button:last-child:not(:first-child) {
   grid-column: 3;
   justify-self: end;
+}
+
+.workHeaderActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .workHeader.inTopbar strong,
@@ -813,7 +820,7 @@ progress {
     min-width: 0;
     grid-template-columns: 1fr;
   }
-  .workHeader.inTopbar > div:not(.pager):not(.statsActions) {
+  .workHeader.inTopbar > div:not(.pager):not(.statsActions):not(.workHeaderActions) {
     text-align: left;
   }
   .workHeader.inTopbar {

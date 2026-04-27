@@ -41,14 +41,14 @@ def load_jsonl(path: str) -> list[dict[str, Any]]:
             try:
                 row = json.loads(stripped)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"绗?{line_number} 琛屼笉鏄悎娉?JSON: {exc}") from exc
+                raise ValueError(f"第 {line_number} 行不是合法 JSON: {exc}") from exc
             if "src_image" not in row or "dst_image" not in row:
-                raise ValueError(f"绗?{line_number} 琛岀己灏?src_image 鎴?dst_image")
+                raise ValueError(f"第 {line_number} 行缺少 src_image 或 dst_image")
             row["labels"] = {}
             row.pop("tags", None)
             rows.append(row)
     if not rows:
-        raise ValueError("jsonl 鏂囦欢涓虹┖")
+        raise ValueError("jsonl 文件为空")
     return rows
 
 
@@ -263,7 +263,7 @@ def combo_dimension_value(annotation: dict[str, Any], dimension: dict[str, Any])
         return f"MOS {value}" if value is not None else None
     if kind == "annotator":
         value = stringify_stat_value(annotation.get("username"))
-        return f"鏍囨敞鑰?{value}" if value is not None else None
+        return f"标注者 {value}" if value is not None else None
     if kind == "label":
         path = dimension.get("path")
         if not isinstance(path, list) or not path:
@@ -304,7 +304,7 @@ def read_image_labels(root_dir: Path, annotation_dir: Path, image_path: str) -> 
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"鏍囩鏂囦欢涓嶆槸鍚堟硶 JSON: {path}: {exc}") from exc
+        raise ValueError(f"标签文件不是合法 JSON: {path}: {exc}") from exc
     if not isinstance(data, dict):
         return {}
     labels = data.get("labels")
@@ -340,12 +340,12 @@ def load_item_labels(
         merge_labels(labels, str(LABEL_OPTION_GROUPS[1]["name"]), read_image_labels(root_path, annotation_path, item["dst_image"]))
         item["labels"] = labels
         if progress_callback and (index == total or index % 50 == 0):
-            progress_callback(20 + int(index / total * 60), f"姝ｅ湪鍔犺浇鏍囩 {index}/{total}")
+            progress_callback(20 + int(index / total * 60), f"正在加载标签 {index}/{total}")
 
 
 def build_subtasks(total_items: int, chunk_size: int) -> list[dict[str, Any]]:
     if chunk_size <= 0:
-        raise ValueError("瀛愪换鍔℃暟閲忓ぇ灏忓繀椤诲ぇ浜?0")
+        raise ValueError("子任务大小必须大于 0")
     subtasks = []
     for start in range(0, total_items, chunk_size):
         indexes = list(range(start, min(start + chunk_size, total_items)))
@@ -655,7 +655,7 @@ class AnnotationStore:
         jsonl_path = str(Path(jsonl_path).expanduser())
         annotation_dir = str(Path(annotation_dir).expanduser()) if annotation_dir else ""
         if progress_callback:
-            progress_callback(5, "姝ｅ湪璇诲彇 jsonl")
+            progress_callback(5, "正在读取 jsonl")
         items = load_jsonl(jsonl_path)
         if progress_callback:
             progress_callback(15, f"loaded {len(items)} rows")
@@ -682,7 +682,7 @@ class AnnotationStore:
         }
         with self._lock:
             if progress_callback:
-                progress_callback(90, "姝ｅ湪鍐欏叆浠诲姟鏁版嵁")
+                progress_callback(90, "正在写入任务数据")
             task["items_storage"] = "chunks"
             task["annotations_storage"] = "items"
             self._write_item_chunks(task, items)
@@ -690,7 +690,7 @@ class AnnotationStore:
             state["tasks"].append(task)
             self._write_state(state)
         if progress_callback:
-            progress_callback(100, "浠诲姟鍒涘缓瀹屾垚")
+            progress_callback(100, "任务创建完成")
         return self._hydrate_task(task)
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
@@ -784,6 +784,50 @@ class AnnotationStore:
             subtask = self._find_subtask(task, subtask_id)
             return self._subtask_payload(task, subtask) if subtask else None
 
+    def abandon_subtask(self, task_id: str, subtask_id: str, username: str) -> dict[str, Any]:
+        username = (username or "").strip()
+        if not username:
+            raise ValueError("username is required")
+        with self._lock:
+            state = self._read_state()
+            task = self._require_task(state, task_id)
+            subtask = self._require_subtask(task, subtask_id)
+            if subtask["assigned_to"] != username:
+                raise PermissionError("该子任务已分配给其他用户")
+
+            deleted_count = 0
+            legacy_annotations = None
+            legacy_path = self._annotations_path(task)
+            if task.get("annotations_storage") != "items" and legacy_path.exists():
+                legacy_annotations = self._read_json_file(legacy_path, {})
+
+            for item_index in subtask["item_indexes"]:
+                item_key = str(int(item_index))
+                if self._read_annotation(task, int(item_index)) is not None:
+                    deleted_count += 1
+                if "annotations" in task:
+                    task["annotations"].pop(item_key, None)
+                if legacy_annotations is not None:
+                    legacy_annotations.pop(item_key, None)
+                annotation_path = self._annotation_item_path(task, int(item_index))
+                if annotation_path.exists():
+                    annotation_path.unlink()
+
+            if legacy_annotations is not None:
+                self._write_json_file(legacy_path, legacy_annotations)
+
+            subtask["assigned_to"] = None
+            subtask["assigned_at"] = None
+            subtask["completed_at"] = None
+            subtask["completed_count"] = 0
+            task["annotation_count"] = len(self._read_annotations(task))
+            self._write_state(state)
+            return {
+                "subtask": self._subtask_payload(task, subtask),
+                "deleted_count": deleted_count,
+                "task": self._task_summary(task),
+            }
+
     def save_annotation(
         self,
         task_id: str,
@@ -797,15 +841,15 @@ class AnnotationStore:
         if not username:
             raise ValueError("username is required")
         if int(mos) < 1 or int(mos) > 5:
-            raise ValueError("MOS 鍒嗗繀椤诲湪 1-5 涔嬮棿")
+            raise ValueError("MOS 分必须在 1-5 之间")
         with self._lock:
             state = self._read_state()
             task = self._require_task(state, task_id)
             subtask = self._require_subtask(task, subtask_id)
             if subtask["assigned_to"] != username:
-                raise PermissionError("璇ュ瓙浠诲姟宸插垎閰嶇粰鍏朵粬鐢ㄦ埛")
+                raise PermissionError("该子任务已分配给其他用户")
             if int(item_index) not in subtask["item_indexes"]:
-                raise ValueError("鏁版嵁涓嶅睘浜庡綋鍓嶅瓙浠诲姟")
+                raise ValueError("数据不属于当前子任务")
 
             existing_annotation = self._read_annotation(task, int(item_index))
             annotation = {
@@ -1179,7 +1223,7 @@ class AnnotationStore:
     def _require_subtask(self, task: dict[str, Any], subtask_id: str) -> dict[str, Any]:
         subtask = self._find_subtask(task, subtask_id)
         if not subtask:
-            raise KeyError("瀛愪换鍔′笉瀛樺湪")
+            raise KeyError("子任务不存在")
         return subtask
 
 
@@ -1233,7 +1277,7 @@ class CreateTaskJobs:
                 job_id,
                 status="completed",
                 progress=100,
-                message="浠诲姟鍒涘缓瀹屾垚",
+                message="任务创建完成",
                 task=self.store._task_summary(task),
             )
         except Exception as exc:  # noqa: BLE001 - surfaced through job status for the UI
@@ -1243,6 +1287,7 @@ class CreateTaskJobs:
 store = AnnotationStore()
 create_jobs = CreateTaskJobs(store)
 app = Flask(__name__, template_folder="templates", static_folder="static")
+app.json.ensure_ascii = False
 
 
 @app.errorhandler(ValueError)
@@ -1326,6 +1371,13 @@ def api_get_subtask(task_id: str, subtask_id: str):
     if subtask is None:
         abort(404)
     return jsonify({"subtask": subtask})
+
+
+@app.delete("/api/tasks/<task_id>/subtasks/<subtask_id>")
+def api_abandon_subtask(task_id: str, subtask_id: str):
+    data = request.get_json(silent=True) or {}
+    result = store.abandon_subtask(task_id, subtask_id, data.get("username", ""))
+    return jsonify(result)
 
 
 @app.post("/api/tasks/<task_id>/subtasks/<subtask_id>/annotations")
@@ -1433,7 +1485,7 @@ def api_download_results(task_id: str):
             download_name=safe_download_name(task_name, "annotations.xlsx"),
         )
 
-    return jsonify({"error": "涓嶆敮鎸佺殑涓嬭浇鏍煎紡"}), 400
+    return jsonify({"error": "不支持的下载格式"}), 400
 
 
 @app.get("/api/tasks/<task_id>/images/<int:item_index>/<kind>")

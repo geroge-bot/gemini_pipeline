@@ -389,6 +389,28 @@ async function movePage(delta) {
   }
 }
 
+async function abandonSubtask() {
+  if (!state.taskId || !state.subtask) return;
+  if (!window.confirm("确认放弃当前子任务？该子任务内已保存的标注会被撤销并删除。")) {
+    return;
+  }
+  const button = $("abandonSubtaskBtn");
+  if (button) button.disabled = true;
+  try {
+    const data = await api(`/api/tasks/${state.taskId}/subtasks/${state.subtask.id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ username: state.username }),
+    });
+    state.subtask = null;
+    state.page = 0;
+    toast(`已放弃子任务，删除 ${data.deleted_count || 0} 条标注`);
+    show("homeView");
+    await loadTasks();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function currentItem() {
   return state.subtask?.items[state.page];
 }
@@ -1150,6 +1172,7 @@ function bindEvents() {
     show("homeView");
     loadTasks().catch((error) => toast(error.message));
   });
+  $("abandonSubtaskBtn").addEventListener("click", () => abandonSubtask().catch((error) => toast(error.message)));
   $("backFromResultsBtn").addEventListener("click", () => {
     closeResultsFilterDrawer();
     show("homeView");

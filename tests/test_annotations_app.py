@@ -141,6 +141,41 @@ def test_create_task_job_reports_progress_and_summary():
         annotations_app.store = old_store
 
 
+def test_annotation_messages_and_json_responses_keep_utf8_chinese_readable():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore, load_jsonl
+
+    source = (PROJECT_ROOT / "web" / "annotations" / "app.py").read_text(encoding="utf-8")
+    for garbled_marker in ["绗", "琛", "鏍", "姝", "瀛", "浠"]:
+        assert garbled_marker not in source
+
+    tmp_path = make_workspace_tmp()
+    bad_jsonl_path = tmp_path / "坏数据.jsonl"
+    write_jsonl(bad_jsonl_path, [{"src_image": "原图/a.jpg"}])
+    try:
+        load_jsonl(str(bad_jsonl_path))
+    except ValueError as exc:
+        assert str(exc) == "第 1 行缺少 src_image 或 dst_image"
+    else:
+        raise AssertionError("load_jsonl should reject rows missing dst_image")
+
+    good_jsonl_path = tmp_path / "好数据.jsonl"
+    write_jsonl(good_jsonl_path, [{"src_image": "原图/a.jpg", "dst_image": "目标图/a.jpg"}])
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("中文任务", str(tmp_path), str(good_jsonl_path), chunk_size=1)
+        client = annotations_app.app.test_client()
+        response = client.get(f"/api/tasks/{task['id']}/download?format=xml")
+
+        assert response.status_code == 400
+        assert response.content_type == "application/json"
+        assert response.data.decode("utf-8") == '{"error":"不支持的下载格式"}\n'
+    finally:
+        annotations_app.store = old_store
+
+
 def test_store_migrates_legacy_inline_task_data_to_split_files():
     from web.annotations.app import AnnotationStore
 
@@ -251,6 +286,82 @@ def test_assign_subtask_is_exclusive_and_reuses_users_active_subtask():
     assert alice_first["id"] == alice_second["id"]
     assert bob["id"] != alice_first["id"]
     assert store.assign_subtask(task["id"], "carol") is None
+
+
+def test_abandon_subtask_deletes_its_annotations_and_releases_assignment():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"} for idx in range(4)],
+    )
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=2)
+    alice_subtask = store.assign_subtask(task["id"], "alice")
+    bob_subtask = store.assign_subtask(task["id"], "bob")
+    alice_indexes = alice_subtask["item_indexes"]
+    bob_index = bob_subtask["item_indexes"][0]
+    store.save_annotation(task["id"], alice_subtask["id"], alice_indexes[0], "alice", 2, {"bad": True})
+    store.save_annotation(task["id"], alice_subtask["id"], alice_indexes[1], "alice", 5, {"good": True})
+    store.save_annotation(task["id"], bob_subtask["id"], bob_index, "bob", 4, {"keep": True})
+
+    result = store.abandon_subtask(task["id"], alice_subtask["id"], "alice")
+
+    assert result["deleted_count"] == 2
+    assert result["subtask"]["assigned_to"] is None
+    assert result["subtask"]["assigned_at"] is None
+    assert result["subtask"]["completed_at"] is None
+    assert result["subtask"]["completed_count"] == 0
+    refreshed = store.get_task(task["id"])
+    assert refreshed["annotation_count"] == 1
+    assert store.get_results(task["id"], threshold=1)[0]["item_index"] == bob_index
+    data_dir = Path(refreshed["data_dir"])
+    assert not (data_dir / "annotations" / f"{alice_indexes[0]}.json").exists()
+    assert not (data_dir / "annotations" / f"{alice_indexes[1]}.json").exists()
+    assert (data_dir / "annotations" / f"{bob_index}.json").exists()
+    reassigned = store.assign_subtask(task["id"], "carol")
+    assert reassigned["id"] == alice_subtask["id"]
+
+
+def test_abandon_subtask_api_requires_owner_and_returns_summary():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"} for idx in range(2)],
+    )
+
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=2)
+        subtask = annotations_app.store.assign_subtask(task["id"], "alice")
+        annotations_app.store.save_annotation(task["id"], subtask["id"], 0, "alice", 2, {"bad": True})
+        client = annotations_app.app.test_client()
+
+        forbidden = client.delete(
+            f"/api/tasks/{task['id']}/subtasks/{subtask['id']}",
+            json={"username": "bob"},
+        )
+        response = client.delete(
+            f"/api/tasks/{task['id']}/subtasks/{subtask['id']}",
+            json={"username": "alice"},
+        )
+
+        assert forbidden.status_code == 403
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["deleted_count"] == 1
+        assert payload["subtask"]["assigned_to"] is None
+    finally:
+        annotations_app.store = old_store
 
 
 def test_save_annotation_marks_progress_and_results_filter_by_threshold():
@@ -578,6 +689,16 @@ def test_annotation_view_uses_narrow_scrollable_tag_panel_without_heading():
     assert "height: var(--review-panel-height);" in tag_editor_styles
     assert "overflow: auto;" in tag_editor_styles
     assert "max-height: none;" in tag_editor_styles
+
+
+def test_annotation_view_exposes_abandon_subtask_action():
+    template = (PROJECT_ROOT / "web" / "annotations" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="abandonSubtaskBtn"' in template
+    assert "abandonSubtask()" in script
+    assert "method: \"DELETE\"" in script
+    assert "/subtasks/${state.subtask.id}" in script
 
 
 def test_statistics_counts_filtered_dimensions_and_combinations():

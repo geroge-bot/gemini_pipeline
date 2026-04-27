@@ -9,7 +9,7 @@
       "chunk_size": 100,
       "created_at": 1777258244.1425035,
       "item_count": 27877,
-      "annotation_count": 21,
+      "annotation_count": 3,
       "data_dir": "D:\\workspace\\gemini_pipeline\\web\\annotations\\data\\tasks\\220e8a51-1cd4-4598-bc8c-cc610c75426c",
       "label_options": [
         {
@@ -23597,10 +23597,10 @@
             21298,
             21299
           ],
-          "assigned_to": "孙本元",
-          "assigned_at": 1777258254.7295637,
+          "assigned_to": null,
+          "assigned_at": null,
           "completed_at": null,
-          "completed_count": 21
+          "completed_count": 0
         },
         {
           "id": "a58f6929-962d-4ff9-9e11-750661ccd71f",
@@ -29317,10 +29317,10 @@
             26498,
             26499
           ],
-          "assigned_to": null,
-          "assigned_at": null,
+          "assigned_to": "孙本元",
+          "assigned_at": 1777269202.2805388,
           "completed_at": null,
-          "completed_count": 0
+          "completed_count": 3
         },
         {
           "id": "fb821c62-ba74-4bd0-aaa5-13d32514a439",
