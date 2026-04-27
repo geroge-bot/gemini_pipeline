@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Pipeline - Data Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            --text-main: #1d1d1f;
+            --text-muted: #86868b;
+            --accent: #0071e3;
+            --accent-hover: #0077ed;
+            --success: #34c759;
+            --warning: #ff9f0a;
+            --error: #ff3b30;
+            --border: #d2d2d7;
+            --font-stack: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-stack);
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            margin: 0;
+            min-height: 100vh;
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Top Nav */
+        .top-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 28px;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .top-nav .nav-brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .top-nav .nav-links { display: flex; gap: 8px; }
+
+        .nav-link {
+            padding: 7px 16px;
+            border-radius: 980px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-decoration: none;
+            color: var(--text-main);
+            background: rgba(0,0,0,0.04);
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: rgba(0,0,0,0.08); }
+        .nav-link.active { background: var(--accent); color: white; }
+
+        /* Content */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        /* Directory Input Form */
+        .dir-form {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .dir-form .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .dir-form label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .dir-form input {
+            width: 100%;
+            padding: 9px 11px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.9);
+            font-family: inherit;
+            font-size: 0.88rem;
+            color: var(--text-main);
+        }
+
+        .dir-form input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 20px;
+            border-radius: 980px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+        }
+        .btn-primary:hover { background-color: var(--accent-hover); transform: scale(1.02); }
+
+        /* Navigation Buttons */
+        .page-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .page-nav button {
+            padding: 8px 20px;
+            border-radius: 980px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.8);
+            font-family: inherit;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .page-nav button:hover { background: #fff; border-color: var(--accent); }
+        .page-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .page-indicator {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        /* Image Container */
+        .image-viewer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            min-height: 400px;
+        }
+
+        .original-section, .generated-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .image-frame {
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            position: relative;
+        }
+
+        .image-frame img {
+            max-width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* Generated images 2x2 grid */
+        .schemes-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .scheme-card {
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            background: rgba(255,255,255,0.6);
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .scheme-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            transform: translateY(-1px);
+        }
+
+        .scheme-card .scheme-img-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.02);
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .scheme-card .scheme-img-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scheme-card .scheme-info {
+            padding: 8px 10px;
+            flex-shrink: 0;
+        }
+
+        .scheme-card .scheme-theme {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .scheme-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 980px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+        }
+
+        .status-success { background: rgba(52, 199, 89, 0.12); color: var(--success); }
+        .status-generated { background: rgba(0, 113, 227, 0.1); color: var(--accent); }
+        .status-analyzed { background: rgba(255, 159, 10, 0.12); color: var(--warning); }
+        .status-pending { background: rgba(0,0,0,0.05); color: var(--text-muted); }
+        .status-failed { background: rgba(255, 59, 48, 0.1); color: var(--error); }
+
+        /* Placeholder */
+        .placeholder-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.02);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            color: var(--text-muted);
+            gap: 6px;
+        }
+
+        .placeholder-icon { font-size: 2rem; opacity: 0.5; }
+        .placeholder-text { font-size: 0.78rem; font-weight: 500; }
+
+        /* Analysis Text */
+        .analysis-section {
+            margin-top: 16px;
+        }
+
+        .analysis-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--accent);
+            border: none;
+            background: none;
+            padding: 6px 0;
+            font-family: inherit;
+        }
+        .analysis-toggle:hover { text-decoration: underline; }
+
+        .analysis-content {
+            display: none;
+            background: rgba(0,0,0,0.03);
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 8px;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .analysis-content.open { display: block; }
+
+        /* Image filename */
+        .image-filename {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            word-break: break-all;
+        }
+
+        .image-seed {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        /* Empty / Loading States */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+        .empty-state .empty-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 6px; color: var(--text-main); }
+        .empty-state .empty-desc { font-size: 0.88rem; }
+
+        /* Short plan tooltip */
+        .scheme-short-plan {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.4;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 800px; /* Widened for side-by-side images */
+            max-width: 90vw;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-left: 1px solid var(--border);
+            box-shadow: -8px 0 32px rgba(0,0,0,0.1);
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .btn-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            width: 32px;
+            height: 32px;
+        }
+
+        .btn-close:hover {
+            color: var(--text-main);
+            background: rgba(0,0,0,0.05);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .sidebar-image {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+            display: block;
+            object-fit: contain;
+            max-height: 400px;
+        }
+
+        .sidebar-images-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-markdown {
+            background: rgba(0,0,0,0.03);
+            border-radius: 10px;
+            padding: 20px;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .sidebar-markdown h1, .sidebar-markdown h2, .sidebar-markdown h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .sidebar-markdown p {
+            margin-bottom: 12px;
+        }
+        
+        .sidebar-markdown p:last-child {
+            margin-bottom: 0;
+        }
+
+        .sidebar-markdown ul, .sidebar-markdown ol {
+            margin-bottom: 12px;
+            padding-left: 20px;
+        }
+
+        .sidebar-markdown pre {
+            background: rgba(0,0,0,0.05);
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        
+        .sidebar-markdown code {
+            font-family: monospace;
+            background: rgba(0,0,0,0.05);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .sidebar-json {
+            background: rgba(0,0,0,0.03);
+            border-radius: 10px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top Navigation -->
+<div class="top-nav">
+    <div class="nav-brand">🍽️ Food Production Studio</div>
+    <div class="nav-links">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/visualize" class="nav-link active">📊 Visualization</a>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Directory Input -->
+    <div class="glass-card">
+        <div class="dir-form">
+            <div class="form-group">
+                <label>Input Directory (Source Images)</label>
+                <input type="text" id="viz_input_dir" value="{{ config.input_directory }}">
+            </div>
+            <div class="form-group">
+                <label>Output Directory (Generated Files)</label>
+                <input type="text" id="viz_output_dir" value="{{ config.output_directory }}">
+            </div>
+            <button class="btn btn-primary" onclick="loadData()" style="margin-bottom: 2px;">🔍 Load</button>
+        </div>
+    </div>
+
+    <!-- Page Navigation -->
+    <div class="page-nav" id="page_nav" style="display: none;">
+        <button onclick="prevPage()" id="btn_prev">← Prev</button>
+        <div class="page-indicator" id="page_indicator">1 / 1</div>
+        <button onclick="nextPage()" id="btn_next">Next →</button>
+    </div>
+
+    <!-- Main Viewer -->
+    <div id="viewer_area">
+        <div class="glass-card">
+            <div class="empty-state">
+                <div class="empty-icon">📂</div>
+                <div class="empty-title">No Data Loaded</div>
+                <div class="empty-desc">Enter your input and output directories above, then click "Load" to visualize results.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sidebar -->
+<div id="right_sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-title">Scheme Details</div>
+        <button class="btn-close" onclick="closeSidebar()">×</button>
+    </div>
+    <div class="sidebar-content" id="sidebar_content">
+        <!-- populated by JS -->
+    </div>
+</div>
+
+<script>
+    let vizData = [];
+    let currentPage = 0;
+    let currentOpenSchemeIndex = -1;
+
+    // Auto-populate from URL params
+    window.onload = function() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('input_dir')) {
+            document.getElementById('viz_input_dir').value = params.get('input_dir');
+        }
+        if (params.get('output_dir')) {
+            document.getElementById('viz_output_dir').value = params.get('output_dir');
+        }
+        // Auto-load if params are present
+        if (params.get('input_dir') || params.get('output_dir')) {
+            loadData();
+        }
+    };
+
+    function loadData() {
+        const inputDir = document.getElementById('viz_input_dir').value;
+        const outputDir = document.getElementById('viz_output_dir').value;
+
+        if (!inputDir) {
+            alert('Please enter an input directory.');
+            return;
+        }
+
+        const url = `/api/visualize?input_dir=${encodeURIComponent(inputDir)}&output_dir=${encodeURIComponent(outputDir)}`;
+        
+        // Show loading state for the initial list scan
+        const area = document.getElementById('viewer_area');
+        area.innerHTML = `
+            <div class="glass-card">
+                <div class="empty-state">
+                    <div class="empty-icon">⏳</div>
+                    <div class="empty-title">Scanning Directory...</div>
+                    <div class="empty-desc">Finding all matching images.</div>
+                </div>
+            </div>`;
+        document.getElementById('page_nav').style.display = 'none';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    alert(data.message);
+                    return;
+                }
+                vizData = data.images || [];
+                currentPage = 0;
+                renderPage();
+            })
+            .catch(err => {
+                alert('Failed to load data: ' + err);
+            });
+    }
+
+    function fetchDetails(indices) {
+        const itemsToFetch = indices.filter(idx => idx >= 0 && idx < vizData.length && !vizData[idx].has_details).map(idx => vizData[idx]);
+        if (itemsToFetch.length === 0) return Promise.resolve();
+        
+        return fetch('/api/visualize/details', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: itemsToFetch })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if(data.status === 'success' && data.details) {
+                data.details.forEach(detailedItem => {
+                    const idx = vizData.findIndex(v => v.original_path === detailedItem.original_path);
+                    if (idx !== -1) {
+                        vizData[idx] = { ...vizData[idx], ...detailedItem, has_details: true };
+                    }
+                });
+            }
+        });
+    }
+
+    function renderPage() {
+        if (typeof closeSidebar === 'function') closeSidebar();
+        
+        const area = document.getElementById('viewer_area');
+        const nav = document.getElementById('page_nav');
+
+        if (vizData.length === 0) {
+            nav.style.display = 'none';
+            area.innerHTML = `
+                <div class="glass-card">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-title">No Images Found</div>
+                        <div class="empty-desc">No valid images found in the specified input directory.</div>
+                    </div>
+                </div>`;
+            return;
+        }
+
+        // Show nav
+        nav.style.display = 'flex';
+        document.getElementById('page_indicator').innerText = `${currentPage + 1} / ${vizData.length}`;
+        document.getElementById('btn_prev').disabled = currentPage === 0;
+        document.getElementById('btn_next').disabled = currentPage === vizData.length - 1;
+
+        const item = vizData[currentPage];
+        
+        // Check if details are loaded for this particular item
+        if (!item.has_details) {
+            area.innerHTML = `
+                <div class="glass-card">
+                    <div class="empty-state">
+                        <div class="empty-icon">⏳</div>
+                        <div class="empty-title">Loading Details...</div>
+                        <div class="empty-desc">Fetching analysis and schemes data for ${escapeHtml(item.relative_path)}</div>
+                    </div>
+                </div>`;
+            
+            // Fetch current item's details, plus optionally a few upcoming ones in parallel
+            fetchDetails([currentPage, currentPage + 1, currentPage + 2]).then(() => {
+                // Make sure the user is still on the same page and hasn't clicked next before it finished
+                const itemAfterLoad = vizData[currentPage];
+                if (itemAfterLoad && itemAfterLoad.original_path === item.original_path && itemAfterLoad.has_details) {
+                    renderPage();
+                }
+            }).catch(err => {
+                area.innerHTML = `
+                    <div class="glass-card">
+                        <div class="empty-state" style="color: var(--error)">
+                            <div class="empty-icon">❌</div>
+                            <div class="empty-title">Failed to load details</div>
+                            <div class="empty-desc">${err}</div>
+                        </div>
+                    </div>`;
+            });
+            return;
+        }
+
+        // Pre-fetch next pages in background if user is sitting on this page
+        fetchDetails([currentPage + 1, currentPage + 2]);
+
+        // Build schemes HTML
+        let schemesHTML = '';
+        const maxSchemes = 4;
+        
+        const schemesLength = item.schemes ? item.schemes.length : 0;
+        
+        for (let i = 0; i < maxSchemes; i++) {
+            const s = item.schemes[i];
+            if (s) {
+                if (s.has_image) {
+                    const imgUrl = `/api/image?path=${encodeURIComponent(s.image_path)}`;
+                    const statusClass = `status-${s.status}`;
+                    schemesHTML += `
+                        <div class="scheme-card" style="cursor: pointer;" onclick="toggleSidebar(${i})">
+                            <div class="scheme-img-wrap">
+                                <img src="${imgUrl}" alt="Scheme ${s.n}" loading="lazy">
+                            </div>
+                            <div class="scheme-info">
+                                <div class="scheme-theme">方案${s.n}${s.theme ? '：' + s.theme : ''}</div>
+                                <span class="scheme-status ${statusClass}">${s.status.toUpperCase()}</span>
+                                ${s.short_plan ? `<div class="scheme-short-plan">${escapeHtml(s.short_plan).substring(0, 120)}</div>` : ''}
+                            </div>
+                        </div>`;
+                } else {
+                    // Scheme exists in analysis but no image generated yet
+                    schemesHTML += `
+                        <div class="placeholder-card">
+                            <div class="placeholder-icon">🖼️</div>
+                            <div class="placeholder-text">方案${s.n} — Awaiting Generation</div>
+                            <span class="scheme-status status-${s.status}">${s.status.toUpperCase()}</span>
+                        </div>`;
+                }
+            } else {
+                // No scheme at all for this slot
+                schemesHTML += `
+                    <div class="placeholder-card">
+                        <div class="placeholder-icon">—</div>
+                        <div class="placeholder-text">No Scheme ${i + 1}</div>
+                    </div>`;
+            }
+        }
+
+        const originalImgUrl = `/api/image?path=${encodeURIComponent(item.original_path)}`;
+        
+        area.innerHTML = `
+            <div class="glass-card">
+                <div class="image-filename">${escapeHtml(item.relative_path)}</div>
+                <div class="image-seed">Seed: ${item.seed} &nbsp;|&nbsp; Schemes: ${item.schemes.length} &nbsp;|&nbsp; Analysis: ${item.has_analysis ? '✅' : '❌'}</div>
+
+                <div class="image-viewer">
+                    <div class="original-section">
+                        <div class="section-label">Original Image</div>
+                        <div class="image-frame">
+                            <img src="${originalImgUrl}" alt="Original">
+                        </div>
+                    </div>
+                    <div class="generated-section">
+                        <div class="section-label">Generated Schemes (1–4)</div>
+                        <div class="schemes-grid">
+                            ${schemesHTML}
+                        </div>
+                    </div>
+                </div>
+
+                ${item.has_analysis ? `
+                <div class="analysis-section">
+                    <button class="analysis-toggle" onclick="toggleAnalysis()">
+                        📄 Show Analysis Text ▸
+                    </button>
+                    <div class="analysis-content" id="analysis_content">${escapeHtml(item.analysis_text)}</div>
+                </div>` : ''}
+            </div>`;
+    }
+
+    function toggleAnalysis() {
+        const el = document.getElementById('analysis_content');
+        if (el) {
+            el.classList.toggle('open');
+            const btn = el.previousElementSibling;
+            if (el.classList.contains('open')) {
+                btn.innerHTML = '📄 Hide Analysis Text ▾';
+            } else {
+                btn.innerHTML = '📄 Show Analysis Text ▸';
+            }
+        }
+    }
+
+    function prevPage() {
+        if (currentPage > 0) { currentPage--; renderPage(); }
+    }
+
+    function nextPage() {
+        if (currentPage < vizData.length - 1) { currentPage++; renderPage(); }
+    }
+
+    function toggleSidebar(schemeIndex) {
+        const item = vizData[currentPage];
+        const sidebar = document.getElementById('right_sidebar');
+        
+        if (currentOpenSchemeIndex === schemeIndex && sidebar.classList.contains('open')) {
+            // Clicked the same scheme while open, so close it
+            closeSidebar();
+        } else {
+            // Open new scheme
+            currentOpenSchemeIndex = schemeIndex;
+            populateSidebar(item, schemeIndex);
+            sidebar.classList.add('open');
+        }
+    }
+
+    function closeSidebar() {
+        const sidebar = document.getElementById('right_sidebar');
+        if (sidebar) sidebar.classList.remove('open');
+        currentOpenSchemeIndex = -1;
+    }
+
+    function populateSidebar(item, schemeIndex) {
+        const content = document.getElementById('sidebar_content');
+        const scheme = item.schemes[schemeIndex];
+        
+        if (!scheme) return;
+        
+        const originalImgUrl = `/api/image?path=${encodeURIComponent(item.original_path)}`;
+        const generatedImgUrl = scheme.has_image ? `/api/image?path=${encodeURIComponent(scheme.image_path)}` : '';
+        
+        // Render simple markdown
+        const renderMarkdown = (text) => {
+            if (!text) return '<em style="color:#888;">Not provided</em>';
+            
+            let html = escapeHtml(text);
+            
+            // Basic markdown processing
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            // List items
+            html = html.replace(/^\s*[-*+]\s+(.*)$/gim, '<li>$1</li>');
+            // Wrap contiguous <li> tags in <ul>
+            html = html.replace(/(<li>.*<\/li>(?:\n<li>.*<\/li>)*)/gi, '<ul>$1</ul>');
+            
+            // Newlines to br
+            html = html.replace(/\n\n/g, '<br><br>');
+            // Don't replace single newlines to avoid breaking lists, but add them where needed for plain text
+            // html = html.replace(/\n(?!\s*<(li|ul|h1|h2|h3)>)/gi, '<br>');
+            
+            return html;
+        };
+
+        let genImgHTML = '';
+        if (generatedImgUrl) {
+            genImgHTML = `
+                <div class="sidebar-section" style="margin-bottom:0;">
+                    <div class="sidebar-label">Generated Image</div>
+                    <img src="${generatedImgUrl}" class="sidebar-image" alt="Generated">
+                </div>`;
+        } else {
+            genImgHTML = `
+                <div class="sidebar-section" style="margin-bottom:0;">
+                    <div class="sidebar-label">Generated Image</div>
+                    <div class="placeholder-card" style="height:300px;">
+                        <div class="placeholder-icon">🖼️</div>
+                        <div class="placeholder-text">Awaiting Generation</div>
+                    </div>
+                </div>`;
+        }
+        
+        const shortPlanHtml = renderMarkdown(scheme.short_plan);
+        const originalPlanHtml = renderMarkdown(scheme.original_plan);
+        
+        // Filter out these keys from the raw JSON to avoid duplication
+        const jsonObj = { ...scheme };
+        delete jsonObj.short_plan;
+        delete jsonObj.original_plan;
+        
+        content.innerHTML = `
+            <div class="sidebar-images-container">
+                <div class="sidebar-section" style="margin-bottom:0;">
+                    <div class="sidebar-label">Original Image</div>
+                    <img src="${originalImgUrl}" class="sidebar-image" alt="Original">
+                </div>
+                ${genImgHTML}
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="sidebar-label">Short Plan</div>
+                <div class="sidebar-markdown">${shortPlanHtml}</div>
+                
+                <div class="sidebar-label" style="margin-top: 24px;">Original Plan</div>
+                <div class="sidebar-markdown">${originalPlanHtml}</div>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="sidebar-label">Other Generated Metadata (JSON)</div>
+                <div class="sidebar-json">${escapeHtml(JSON.stringify(jsonObj, null, 2))}</div>
+            </div>
+        `;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft') prevPage();
+        if (e.key === 'ArrowRight') nextPage();
+    });
+</script>
+
+</body>
+</html>

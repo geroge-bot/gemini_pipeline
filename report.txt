@@ -1,0 +1,351 @@
+Total original images: 300
+Prefix: 下午茶_下午茶_单菜品特写_054_20_37_华为_IMG_20250824_142009
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_054_20_37_华为_IMG_20250824_142009_p1_5711.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_054_20_37_华为_IMG_20250824_142009_p1_5711.json']
+Prefix: 下午茶_下午茶_单菜品特写_186_LMU-21_IMG_1756277301_215
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_单菜品特写_198_LMU-21_IMG_1756285189_233
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_198_LMU-21_IMG_1756285189_233_p1_5985.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_198_LMU-21_IMG_1756285189_233_p1_5985.json']
+Prefix: 下午茶_下午茶_单菜品特写_65_SCA_14_IMG_20260203_082818
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_65_SCA_14_IMG_20260203_082818_p1_4954.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_单菜品特写_974_华为_IMG_20250110_134814
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_单菜品特写_IMG_20240721_170025
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_IMG_20240721_170025_p1_6745.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_IMG_20240721_170025_p1_6745.json']
+Prefix: 下午茶_下午茶_单菜品特写_non-human_7598
+  Missing JPGs! Found 2 (Expected 2): ['下午茶_下午茶_单菜品特写_non-human_7598_p1_6490.jpg', '下午茶_下午茶_单菜品特写_non-human_7598_p2_6490.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_non-human_7598_p1_6490.json']
+Prefix: 下午茶_下午茶_单菜品特写_non-human_7660
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_non-human_7660_p1_3318.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_单菜品特写_non-human_7660_p1_3318.json']
+Prefix: 下午茶_下午茶_多菜品中景_042_16_30_华为_IMG_20250818_124405
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_042_16_30_华为_IMG_20250818_124405_p1_3145.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_042_16_30_华为_IMG_20250818_124405_p1_3145.json']
+Prefix: 下午茶_下午茶_多菜品中景_042_LMU_48_IMG_20251115_081035
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_多菜品中景_04_SCA_14_IMG_20260202_161201
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_多菜品中景_07_SA+_30_简_IMG_20260216_221336
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_07_SA+_30_简_IMG_20260216_221336_p1_2410.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_07_SA+_30_简_IMG_20260216_221336_p1_2410.json']
+Prefix: 下午茶_下午茶_多菜品中景_1567_华为_IMG_20250115_191431
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_1567_华为_IMG_20250115_191431_p1_7214.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_1567_华为_IMG_20250115_191431_p1_7214.json']
+Prefix: 下午茶_下午茶_多菜品中景_208_LMU-21_IMG_1756285426_243
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_多菜品中景_260028
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_260028_p1_9802.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_260028_p1_9802.json']
+Prefix: 下午茶_下午茶_多菜品中景_46_华为_IMG_20241221_155502
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_多菜品中景_727_华为_IMG_20241226_102843
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_多菜品中景_non-human_7696
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_多菜品中景_non-human_7696_p1_4300.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_菜品与环境_185_LMU-21_IMG_1756277292_214
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_菜品与环境_224_LMU-21_IMG_1756286028_259
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 下午茶_下午茶_菜品与环境_IMG_20251026_164745
+  Missing JPGs! Found 1 (Expected 2): ['下午茶_下午茶_菜品与环境_IMG_20251026_164745_p1_5964.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['下午茶_下午茶_菜品与环境_IMG_20251026_164745_p1_5964.json']
+Prefix: 中餐厅_中式宴席_单菜品特写_014_LMU_48_IMG_20251114_132012
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_中式宴席_单菜品特写_2260202028_SA+_33_IMG_20260130_200250
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_中式宴席_单菜品特写_2260202029_SA+_33_IMG_20260130_200337
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_中式宴席_单菜品特写_36_SA+_33_罗_IMG_20260223_125059
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_中式宴席_单菜品特写_non-human_2836
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_中式宴席_单菜品特写_non-human_7601
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_单菜品特写_non-human_3076
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_单菜品特写_non-human_3316
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_多菜品中景_1165_华为_IMG_20250104_133305
+  Missing JPGs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_1165_华为_IMG_20250104_133305_p1_0067.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_1165_华为_IMG_20250104_133305_p1_0067.json']
+Prefix: 中餐厅_小炒快餐_多菜品中景_153_LMU_IMG_20251004_125117
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_多菜品中景_31_SA+_30_简_IMG_20260221_122339
+  Missing JPGs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_31_SA+_30_简_IMG_20260221_122339_p1_5738.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_31_SA+_30_简_IMG_20260221_122339_p1_5738.json']
+Prefix: 中餐厅_小炒快餐_多菜品中景_47_SA+30_IMG_20251207_104029
+  Missing JPGs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_47_SA+30_IMG_20251207_104029_p1_2059.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['中餐厅_小炒快餐_多菜品中景_47_SA+30_IMG_20251207_104029_p1_2059.json']
+Prefix: 中餐厅_小炒快餐_多菜品中景_non-human_3082
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_多菜品中景_non-human_7645
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 中餐厅_小炒快餐_菜品与环境_323_华为_IMG_20241226_174335
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_01_SA+_30_简_IMG_20260216_180104
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_085_LMU_IMG_20251002_195044
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_087_LMU_IMG_20251002_195055
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_12_SA+_30_简_IMG_20260218_133424
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家宴_单菜品特写_12_SA+_30_简_IMG_20260218_133424_p1_5626.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_239_LMU_IMG_20251005_191706
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_单菜品特写_IMG_20241103_180748
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家宴_单菜品特写_IMG_20241103_180748_p1_9815.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['家庭烹饪_家宴_单菜品特写_IMG_20241103_180748_p1_9815.json']
+Prefix: 家庭烹饪_家宴_多菜品中景_13_SA+_30_简_IMG_20260218_134336
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_多菜品中景_223_LMU_IMG_20251005_124659
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_多菜品中景_247_LMU_IMG_20251005_193722
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_多菜品中景_255_LMU_IMG_20251006_185915
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家宴_多菜品中景_255_LMU_IMG_20251006_185915_p2_6070.jpg']
+  Missing JSONs! Found 1 (Expected 2): ['家庭烹饪_家宴_多菜品中景_255_LMU_IMG_20251006_185915_p2_6070.json']
+Prefix: 家庭烹饪_家宴_多菜品中景_265_LMU_IMG_20251006_190216
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_多菜品中景_268_华为_IMG_20241221_174913
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家宴_多菜品中景_IMG_20260206_180517
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_14_SA+_33_罗_IMG_20260222_121302
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_221_LMU_IMG_20251005_122202
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_260024
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_IMG_20241103_181231
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_IMG_20250406_110334
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_non-human_7551
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_non-human_7572
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家常菜一人食_单菜品特写_non-human_7572_p1_8999.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_non-human_7576
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_non-human_7578
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家常菜一人食_单菜品特写_non-human_7578_p2_8691.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_单菜品特写_non-human_7699
+  Missing JPGs! Found 1 (Expected 2): ['家庭烹饪_家常菜一人食_单菜品特写_non-human_7699_p2_9077.jpg']
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_219_LMU_IMG_20251005_122118
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_225_LMU_IMG_20251005_124738
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_227_LMU_IMG_20251005_124826
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_253_LMU_IMG_20251006_131156
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_IMG_20241101_201232
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_IMG_20250404_171346
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 家庭烹饪_家常菜一人食_多菜品中景_IMG_20250914_163631
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_居酒屋_多菜品中景_025_LMU_48_IMG_20251114_200816
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_单菜品特写_111_LMU_IMG_20251003_153855
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_单菜品特写_16_SA+_30_简_IMG_20260218_191018
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_单菜品特写_2025_10_31_0008
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_多菜品中景_090_LMU_IMG_20251003_152411
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_多菜品中景_091_LMU_IMG_20251003_152612
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_多菜品中景_18_SA+_30_简_IMG_20260218_191429
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 日式料理_正餐店_多菜品中景_19_SA+_30_简_IMG_20260218_191612
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_单菜品特写_055_22_09_华为_IMG_20250813_221700
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_单菜品特写_07_SA+_20_IMG_20251008_173113
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_单菜品特写_2260202034_SA+_33_IMG_20260130_201259
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_单菜品特写_2260202036_SA+_33_IMG_20260131_184740
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_单菜品特写_2260202040_SA+_33_IMG_20260131_185415
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_多菜品中景_331_华为_IMG_20241220_194239
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_多菜品中景_543_华为_IMG_20241222_195758
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_多菜品中景_IMG_20251005_165037
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_多菜品中景_IMG_20251025_185640
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 火锅_火锅_多菜品中景_IMG_20251101_215911
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_单菜品特写_032_14_32_华为_IMG_20250817_192637
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_单菜品特写_058_22_30_华为_IMG_20250819_010001
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_单菜品特写_IMG_20240927_193327
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_单菜品特写_IMG_20250505_195420
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_多菜品中景_12_SA+30_IMG_20251206_032023
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_多菜品中景_17_SCA_14_IMG_20260202_165835
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_多菜品中景_19_SA+30_IMG_20251206_035938
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_多菜品中景_22_SA+30_IMG_20251206_040532
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 烧烤烤肉_烧烤烤肉_多菜品中景_351_华为_IMG_20241226_202121
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_单菜品特写_199_LMU_IMG_20251004_191459
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_单菜品特写_209_LMU_IMG_20251004_192546
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_多菜品中景_060_LMU-21_IMG_1756009710_070
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_多菜品中景_IMG_20241110_133033
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_多菜品中景_IMG_20260103_191009
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_Finedining Bistro_多菜品中景_non-human_7566
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_单菜品特写_260034
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_单菜品特写_IMG_20260110_162737
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_单菜品特写_IMG_20260111_171922
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_多菜品中景_1560_华为_IMG_20250115_175724
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_多菜品中景_1必胜客餐厅拍美食_18邓女士_华为
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_西式快餐_多菜品中景_IMG_20260111_171933
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_轻食_单菜品特写_028_LMU_48_IMG_20251114_201647
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_轻食_单菜品特写_IMG_20241110_132945
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_轻食_多菜品中景_153_LMU-21_IMG_1756204226_182
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 西餐_轻食_菜品与环境_170_LMU-21_IMG_1756269430_199
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_单菜品特写_008_LMU-21_IMG_1756009041_017
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_单菜品特写_08_SCA_14_IMG_20260202_162405
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_多菜品中景_010_3_17_华为_IMG_20250816_225407
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_多菜品中景_011_3_42_华为_IMG_20250819_170554
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_多菜品中景_16_SCA_14_IMG_20260202_165428
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 酒水饮料_酒水饮料_菜品与环境_012_LMU-21_IMG_1756009342_021
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+Prefix: 韩式料理_韩式料理_多菜品中景_48_SA+30_IMG_20251207_104125
+  Missing JPGs! Found 0 (Expected 2): []
+  Missing JSONs! Found 0 (Expected 2): []
+
+Total images with missing files: 116

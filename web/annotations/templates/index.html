@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据打分 & 标注平台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>数据打分 & 标注平台</h1>
+      <p id="sessionLine">未登录</p>
+    </div>
+    <div id="topbarWorkSlot" class="topbarWorkSlot" aria-live="polite"></div>
+    <div class="settings">
+      <label>自动跳过阈值 <input id="thresholdInput" type="number" min="1" max="5" value="4"></label>
+      <label>下一页快捷键 <input id="nextKeyInput" maxlength="1" value="R"></label>
+      <button id="applySettingsBtn" class="ghost">设置</button>
+      <button id="logoutBtn" class="ghost">切换用户</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="loginView" class="panel narrow">
+      <h2>登录</h2>
+      <form id="loginForm" class="stack">
+        <input id="usernameInput" autocomplete="username" placeholder="输入用户名">
+        <button type="submit">进入平台</button>
+      </form>
+    </section>
+
+    <section id="homeView" class="panel hidden">
+      <div class="split">
+        <form id="createTaskForm" class="stack">
+          <h2>新建任务</h2>
+          <input id="taskNameInput" placeholder="任务名称，可留空">
+          <input id="rootDirInput" placeholder="根目录，例如 D:\202604-美食数据-历史数据整理\整理后">
+          <input id="annotationDirInput" placeholder="标注目录，例如 D:\202604-美食数据-历史数据整理\标注结果">
+          <input id="jsonlPathInput" placeholder="jsonl 文件，例如 D:\202604-美食数据-历史数据整理\整理后\data.jsonl">
+          <input id="chunkSizeInput" type="number" min="1" value="100" placeholder="子任务大小">
+          <button type="submit">创建任务</button>
+          <div id="createProgress" class="progressBox hidden">
+            <div class="progressMeta">
+              <span id="createProgressText">准备创建</span>
+              <span id="createProgressPercent">0%</span>
+            </div>
+            <progress id="createProgressBar" max="100" value="0"></progress>
+          </div>
+        </form>
+        <div>
+          <div class="sectionHead">
+            <h2>已有任务</h2>
+            <button id="refreshTasksBtn" class="ghost">刷新</button>
+          </div>
+          <div id="taskList" class="taskList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="annotateView" class="hidden">
+      <div class="workHeader">
+        <button id="backHomeBtn" class="ghost">返回任务</button>
+        <div class="workHeaderTitle">
+          <strong id="workTitle"></strong>
+          <span id="progressText"></span>
+        </div>
+      </div>
+      <div class="reviewGrid">
+        <figure>
+          <figcaption>原图</figcaption>
+          <img id="srcImage" alt="原图" loading="lazy">
+        </figure>
+        <figure>
+          <figcaption>目标图</figcaption>
+          <img id="dstImage" alt="目标图" loading="lazy">
+        </figure>
+        <aside class="tagEditor">
+          <div id="tagList"></div>
+        </aside>
+      </div>
+      <div class="annotationControls">
+        <div class="scoreBar" id="scoreBar"></div>
+        <div class="pager annotationPager">
+          <button id="prevBtn" class="ghost">上一页</button>
+          <input id="jumpInput" type="number" min="1">
+          <button id="jumpBtn" class="ghost">跳转</button>
+          <button id="nextBtn">下一页</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="resultsView" class="hidden">
+      <div class="workHeader">
+        <button id="backFromResultsBtn" class="ghost">返回任务</button>
+        <div>
+          <strong id="resultsTitle"></strong>
+          <span id="resultsProgress"></span>
+        </div>
+        <div class="pager">
+          <button id="resultsPrevBtn" class="ghost">上一页</button>
+          <input id="resultsJumpInput" type="number" min="1">
+          <button id="resultsJumpBtn" class="ghost">跳转</button>
+          <button id="resultsNextBtn">下一页</button>
+        </div>
+        <button id="openResultsFilterBtn" class="ghost">筛选</button>
+      </div>
+      <div class="reviewGrid">
+        <figure>
+          <figcaption>原图</figcaption>
+          <img id="resultSrcImage" alt="原图" loading="lazy">
+        </figure>
+        <figure>
+          <figcaption>生成图</figcaption>
+          <img id="resultDstImage" alt="生成图" loading="lazy">
+        </figure>
+        <aside class="tagEditor">
+          <h3>结果</h3>
+          <div id="resultMeta"></div>
+          <div id="resultTags"></div>
+        </aside>
+      </div>
+      <div id="resultsPagerSlot" class="bottomPager"></div>
+    </section>
+
+    <section id="statsView" class="hidden">
+      <div class="workHeader">
+        <button id="backFromStatsBtn" class="ghost">返回任务</button>
+        <div>
+          <strong id="statsTitle"></strong>
+          <span id="statsSummary"></span>
+        </div>
+        <div class="statsActions">
+          <button id="openStatsFilterBtn" class="ghost">筛选</button>
+          <button id="applyStatsCombinationBtn">组合统计</button>
+        </div>
+      </div>
+      <div class="statsLayout">
+        <aside class="statsSidebar">
+          <h3>组合维度</h3>
+          <div id="statsDimensionList" class="statsDimensionList"></div>
+          <div class="taskMeta">最多选择 3 个维度，至少选择 2 个维度后生成组合统计。</div>
+        </aside>
+        <section class="statsContent">
+          <div id="statsCharts" class="statsCharts"></div>
+          <div id="statsCombinations" class="statsCharts"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="resultsFilterOverlay" class="drawerOverlay hidden"></div>
+  <aside id="resultsFilterDrawer" class="filterDrawer hidden" aria-hidden="true">
+    <div class="drawerHeader">
+      <h2 id="resultsFilterTitle">结果筛选</h2>
+      <button id="closeResultsFilterBtn" class="ghost">关闭</button>
+    </div>
+    <div id="resultsFilterBody" class="filterBody"></div>
+    <div class="drawerActions">
+      <button id="resetResultsFilterBtn" class="ghost">清空</button>
+      <button id="applyResultsFilterBtn">筛选</button>
+    </div>
+  </aside>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
