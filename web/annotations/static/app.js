@@ -11,6 +11,9 @@ const state = {
   currentTags: {},
   results: [],
   resultPage: 0,
+  visualizationResults: [],
+  visualizationPage: 0,
+  visualizationTotal: 0,
   resultFilterOptions: { mos: [], annotators: [], label_options: [] },
   resultFilters: { mos: [], annotators: [], labels: {} },
   statistics: null,
@@ -25,7 +28,7 @@ const MAX_PRELOADED_IMAGES = 80;
 const $ = (id) => document.getElementById(id);
 
 function show(viewId) {
-  ["loginView", "homeView", "annotateView", "resultsView", "statsView"].forEach((id) => {
+  ["loginView", "homeView", "annotateView", "resultsView", "visualizationView", "statsView"].forEach((id) => {
     $(id).classList.toggle("hidden", id !== viewId);
   });
   document.body.dataset.view = viewId;
@@ -58,6 +61,7 @@ function syncTopbarWork(viewId) {
 function dockBottomPager(viewId, header) {
   const target = {
     resultsView: $("resultsPagerSlot"),
+    visualizationView: $("visualizationPagerSlot"),
   }[viewId];
   const pager = header.querySelector(".pager");
   if (!target || !pager) return;
@@ -143,6 +147,8 @@ function renderTasks() {
         <button class="ghost" data-action="download-xlsx" data-id="${task.id}">下载 Excel</button>
         <button class="dangerBtn" data-action="delete" data-id="${task.id}" data-name="${escapeAttr(task.name)}">删除任务</button>
         <button class="ghost" data-action="refresh-labels" data-id="${task.id}">更新AI标签</button>
+        <button class="ghost" data-action="visualization" data-id="${task.id}" data-name="${escapeAttr(task.name)}">全部数据可视化</button>
+        <button class="ghost" data-action="cache-inputs" data-id="${task.id}">缓存输入图</button>
       </div>
     `;
     list.appendChild(card);
@@ -167,6 +173,38 @@ async function refreshTaskLabels(taskId, button) {
     await loadTasks();
   } finally {
     if (button) button.disabled = false;
+  }
+}
+
+async function warmInputPreviewCache(taskId, button) {
+  const originalText = button?.textContent || "缓存输入图";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "缓存中 0%";
+  }
+  try {
+    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs`, { method: "POST" });
+    const job = await waitForPreviewCacheJob(taskId, data.job.id, button);
+    const result = job.result || {};
+    toast(`输入图缓存完成：生成 ${result.generated_count || 0}，跳过 ${result.skipped_count || 0}，失败 ${result.failed_count || 0}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function waitForPreviewCacheJob(taskId, jobId, button) {
+  while (true) {
+    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs/${jobId}`);
+    const job = data.job;
+    if (button) {
+      button.textContent = `缓存中 ${job.progress || 0}%`;
+    }
+    if (job.status === "completed") return job;
+    if (job.status === "failed") throw new Error(job.error || "输入图缓存失败");
+    await sleep(350);
   }
 }
 
@@ -439,6 +477,31 @@ async function reloadResults() {
   }
 }
 
+async function openVisualization(taskId, taskName) {
+  state.taskId = taskId;
+  state.taskName = taskName;
+  state.visualizationPage = 0;
+  await reloadVisualizationResults();
+  show("visualizationView");
+  renderVisualizationPage();
+}
+
+async function reloadVisualizationResults() {
+  const params = new URLSearchParams({
+    page: String(state.visualizationPage),
+    limit: "1",
+  });
+  const data = await api(`/api/tasks/${state.taskId}/visualization-results?${params.toString()}`);
+  state.visualizationResults = data.results || [];
+  state.visualizationTotal = Number(data.total || 0);
+  if (state.visualizationPage >= state.visualizationTotal) {
+    state.visualizationPage = Math.max(0, state.visualizationTotal - 1);
+    if (state.visualizationTotal > 0) {
+      await reloadVisualizationResults();
+    }
+  }
+}
+
 async function openStatistics(taskId, taskName) {
   state.taskId = taskId;
   state.taskName = taskName;
@@ -517,6 +580,63 @@ function renderResultTags(item) {
         <div>
           <div class="tagKey">${escapeHtml(row.path)}</div>
           <button class="resultTagValue editableResultValue" type="button">${escapeHtml(String(row.value))}</button>
+        </div>
+      </div>
+    `)
+    .join("") || '<div class="taskMeta">No tags</div>';
+}
+
+function renderVisualizationPage() {
+  $("visualizationTitle").textContent = `${state.taskName} / 文字可视化`;
+  if (!state.visualizationTotal || !state.visualizationResults.length) {
+    $("visualizationProgress").textContent = "暂无数据";
+    $("visualizationSrcImage").removeAttribute("src");
+    $("visualizationDstImage").removeAttribute("src");
+    $("visualizationPrompts").innerHTML = '<div class="taskMeta">暂无文字描述</div>';
+    $("visualizationMeta").innerHTML = "";
+    $("visualizationTags").innerHTML = '<div class="taskMeta">暂无标签</div>';
+    return;
+  }
+  const item = state.visualizationResults[0];
+  $("visualizationProgress").textContent = `第 ${state.visualizationPage + 1} / ${state.visualizationTotal} 条`;
+  $("visualizationJumpInput").value = state.visualizationPage + 1;
+  $("visualizationJumpInput").max = state.visualizationTotal;
+  preparePreviewImage($("visualizationSrcImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
+  preparePreviewImage($("visualizationDstImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
+  preloadVisualizationNeighbors();
+  renderVisualizationPrompts(item.description_prompts || {});
+  $("visualizationMeta").innerHTML = `
+    <span class="resultBadge">MOS ${escapeHtml(item.mos == null ? "未打分" : String(item.mos))}</span>
+    <span class="resultBadge">Annotator ${escapeHtml(item.username || "")}</span>
+  `;
+  renderReadonlyTags("visualizationTags", item.tags);
+}
+
+function renderVisualizationPrompts(prompts) {
+  const sections = [
+    ["AIGC文字标注", prompts.adjustment_aigc],
+    ["用户提示", prompts.adjustment_user],
+    ["思考过程", prompts.thinking],
+  ];
+  $("visualizationPrompts").innerHTML = sections
+    .map(([title, value]) => `
+      <section class="promptBlock">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(value || "暂无")}</p>
+      </section>
+    `)
+    .join("");
+}
+
+function renderReadonlyTags(targetId, tags) {
+  const rows = flattenTags(tags);
+  $(targetId).innerHTML = rows
+    .map((row) => `
+      <div class="tagRow resultTagRow readonlyTagRow">
+        <div></div>
+        <div>
+          <div class="tagKey">${escapeHtml(row.path)}</div>
+          <div class="resultTagValue">${escapeHtml(String(row.value))}</div>
         </div>
       </div>
     `)
@@ -994,6 +1114,15 @@ function preloadResultNeighbors() {
   preloadNeighborItems(state.results, state.resultPage);
 }
 
+function preloadVisualizationNeighbors() {
+  if (!state.visualizationTotal) return;
+  [state.visualizationPage + 1, state.visualizationPage - 1, state.visualizationPage + 2].forEach((index) => {
+    if (index < 0 || index >= state.visualizationTotal) return;
+    preloadImage(`/api/tasks/${state.taskId}/images/${index}/src`);
+    preloadImage(`/api/tasks/${state.taskId}/images/${index}/dst`);
+  });
+}
+
 function preloadNeighborItems(items, page) {
   [page + 1, page - 1, page + 2].forEach((index) => {
     const item = items[index];
@@ -1162,8 +1291,10 @@ function bindEvents() {
     const taskName = button.dataset.name;
     if (button.dataset.action === "annotate") startAnnotation(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "results") openResults(taskId, taskName).catch((error) => toast(error.message));
+    if (button.dataset.action === "visualization") openVisualization(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "stats") openStatistics(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "refresh-labels") refreshTaskLabels(taskId, button).catch((error) => toast(error.message));
+    if (button.dataset.action === "cache-inputs") warmInputPreviewCache(taskId, button).catch((error) => toast(error.message));
     if (button.dataset.action === "download-jsonl") downloadTask(taskId, "jsonl");
     if (button.dataset.action === "download-xlsx") downloadTask(taskId, "xlsx");
     if (button.dataset.action === "delete") deleteTask(taskId, taskName).catch((error) => toast(error.message));
@@ -1175,6 +1306,10 @@ function bindEvents() {
   $("abandonSubtaskBtn").addEventListener("click", () => abandonSubtask().catch((error) => toast(error.message)));
   $("backFromResultsBtn").addEventListener("click", () => {
     closeResultsFilterDrawer();
+    show("homeView");
+    loadTasks().catch((error) => toast(error.message));
+  });
+  $("backFromVisualizationBtn").addEventListener("click", () => {
     show("homeView");
     loadTasks().catch((error) => toast(error.message));
   });
@@ -1240,11 +1375,45 @@ function bindEvents() {
       renderResultPage();
     }
   });
-  ["srcImage", "dstImage", "resultSrcImage", "resultDstImage"].forEach((id) => {
+  $("visualizationPrevBtn").addEventListener("click", () => {
+    if (state.visualizationPage > 0) {
+      state.visualizationPage -= 1;
+      reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+    }
+  });
+  $("visualizationNextBtn").addEventListener("click", () => {
+    if (state.visualizationPage < state.visualizationTotal - 1) {
+      state.visualizationPage += 1;
+      reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+    }
+  });
+  $("visualizationJumpBtn").addEventListener("click", () => {
+    const target = Number($("visualizationJumpInput").value) - 1;
+    if (target >= 0 && target < state.visualizationTotal) {
+      state.visualizationPage = target;
+      reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+    }
+  });
+  ["srcImage", "dstImage", "resultSrcImage", "resultDstImage", "visualizationSrcImage", "visualizationDstImage"].forEach((id) => {
     $(id).addEventListener("click", () => loadOriginalImage($(id)));
   });
   document.addEventListener("keydown", (event) => {
     if (["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
+    if (!$("visualizationView").classList.contains("hidden")) {
+      if (event.key === "ArrowLeft" && state.visualizationPage > 0) {
+        state.visualizationPage -= 1;
+        reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+      }
+      if (event.key === "ArrowRight" && state.visualizationPage < state.visualizationTotal - 1) {
+        state.visualizationPage += 1;
+        reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+      }
+      if (event.key.toUpperCase() === state.nextKey.toUpperCase() && state.visualizationPage < state.visualizationTotal - 1) {
+        state.visualizationPage += 1;
+        reloadVisualizationResults().then(renderVisualizationPage).catch((error) => toast(error.message));
+      }
+      return;
+    }
     if (!$("resultsView").classList.contains("hidden")) {
       if (event.key === "ArrowLeft" && state.resultPage > 0) {
         state.resultPage -= 1;

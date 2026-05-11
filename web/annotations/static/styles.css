@@ -301,12 +301,19 @@ main {
   min-height: 62vh;
 }
 
+.visualizationGrid {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(260px, 1.1fr) minmax(260px, 1fr);
+  gap: 12px;
+  min-height: 62vh;
+}
+
 #annotateView .reviewGrid {
   height: var(--review-panel-height);
   min-height: 0;
 }
 
-figure, .tagEditor {
+figure, .tagEditor, .promptPanel {
   margin: 0;
   padding: 12px;
   background: var(--panel);
@@ -346,6 +353,41 @@ figure img.fullResolution {
   overflow: auto;
   max-height: calc(62vh + 78px);
   font-size: 14px;
+}
+
+.promptPanel {
+  overflow: auto;
+  max-height: calc(62vh + 78px);
+  font-size: 14px;
+}
+
+.promptPanel h3,
+.readonlyResults h3 {
+  margin-bottom: 10px;
+}
+
+.promptBlock {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.promptBlock:first-child {
+  padding-top: 0;
+}
+
+.promptBlock:last-child {
+  border-bottom: 0;
+}
+
+.promptBlock p {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.readonlyTagRow .resultTagValue {
+  display: inline-block;
 }
 
 #annotateView .tagEditor {
@@ -815,6 +857,7 @@ progress {
   .settings,
   .split,
   .reviewGrid,
+  .visualizationGrid,
   .statsLayout {
     flex-basis: auto;
     min-width: 0;

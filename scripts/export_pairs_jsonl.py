@@ -5,18 +5,18 @@ from pathlib import Path
 from scripts.move_filtered import parse_generated_image_name
 
 
-DEFAULT_INPUT_DIR = r"D:\202604-美食数据-历史数据整理\整理后"
-IMAGE_ROOT_NAMES = {r"原始图片", r"生成图片"}
+DEFAULT_INPUT_DIR = r"D:\美食数据\美食数据-xhs-退化"
+IMAGE_ROOT_NAMES = [r"退化-v3", r"原图-去水印"]
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
 def find_original_path(input_dir: Path, generated_path: Path, parsed: dict) -> Path | None:
     relative_parent = generated_path.parent.relative_to(input_dir)
     parts = list(relative_parent.parts)
-    if not parts or parts[0] != r"生成图片":
+    if not parts or parts[0] != IMAGE_ROOT_NAMES[1]:
         return None
 
-    original_root = input_dir / r"原始图片" / Path(*parts[1:])
+    original_root = input_dir / IMAGE_ROOT_NAMES[0] / Path(*parts[1:])
     original_stem = parsed["original_stem"]
     for ext in IMAGE_EXTENSIONS:
         candidate = original_root / f"{original_stem}{ext}"

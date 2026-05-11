@@ -266,6 +266,180 @@ def test_subtask_payload_uses_image_label_json_and_hides_unseen_label_dimensions
     assert ("输入图", "光线") not in visible
 
 
+def test_read_image_description_prompts_from_ai_label_json():
+    from web.annotations.app import read_image_description_prompts
+
+    tmp_path = make_workspace_tmp()
+    root = tmp_path / "images"
+    annotation_dir = tmp_path / "labels"
+    content = {
+        "adjustment_aigc": "AIGC text",
+        "adjustment_user": "User prompt",
+        "thinking": "Reasoning text",
+    }
+    write_json(
+        annotation_dir / "dst" / "sample.json",
+        {
+            "description": {
+                "conversation_history": [
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {"content": json.dumps(content, ensure_ascii=False)},
+                ]
+            }
+        },
+    )
+
+    prompts = read_image_description_prompts(root, annotation_dir, "dst/sample.jpg")
+
+    assert prompts == content
+
+
+def test_read_image_description_prompts_accepts_fenced_history_answer():
+    from web.annotations.app import read_image_description_prompts
+
+    tmp_path = make_workspace_tmp()
+    root = tmp_path / "images"
+    annotation_dir = tmp_path / "labels"
+    content = {
+        "adjustment_aigc": "AIGC text from fenced answer",
+        "adjustment_user": "User prompt from fenced answer",
+        "thinking": "Reasoning text from fenced answer",
+    }
+    write_json(
+        annotation_dir / "dst" / "sample.json",
+        {
+            "description": {
+                "conversation_history": [
+                    {"role": "system", "content": "schema"},
+                    {"role": "user", "content": [{"type": "text", "text": "question"}]},
+                    {
+                        "role": "assistant",
+                        "content": "```json\n" + json.dumps(content, ensure_ascii=False) + "\n```",
+                    },
+                ]
+            }
+        },
+    )
+
+    prompts = read_image_description_prompts(root, annotation_dir, "dst/sample.jpg")
+
+    assert prompts == content
+
+
+def test_visualization_results_api_includes_description_prompts():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    root = tmp_path / "images"
+    annotation_dir = tmp_path / "labels"
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/b.jpg"},
+            {"src_image": "src/c.jpg", "dst_image": "dst/d.jpg"},
+        ],
+    )
+    write_json(
+        annotation_dir / "dst" / "b.json",
+        {
+            "description": {
+                "conversation_history": [
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {
+                        "content": json.dumps(
+                            {
+                                "adjustment_aigc": "AIGC caption",
+                                "adjustment_user": "User instruction",
+                                "thinking": "Model thoughts",
+                            },
+                            ensure_ascii=False,
+                        )
+                    },
+                ]
+            },
+            "labels": {"output": {"quality": "good"}},
+        },
+    )
+    write_json(
+        annotation_dir / "dst" / "d.json",
+        {
+            "description": {
+                "conversation_history": [
+                    {},
+                    {},
+                    {},
+                    {},
+                    {},
+                    {
+                        "content": json.dumps(
+                            {
+                                "adjustment_aigc": "Unscored AIGC caption",
+                                "adjustment_user": "Unscored user instruction",
+                                "thinking": "Unscored model thoughts",
+                            },
+                            ensure_ascii=False,
+                        )
+                    },
+                ]
+            },
+            "labels": {"output": {"quality": "unscored-label"}},
+        },
+    )
+
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("food", str(root), str(jsonl_path), chunk_size=2, annotation_dir=str(annotation_dir))
+        subtask = annotations_app.store.assign_subtask(task["id"], "alice")
+        annotations_app.store.save_annotation(task["id"], subtask["id"], 0, "alice", 5, {"score": "ok"})
+        client = annotations_app.app.test_client()
+
+        response = client.get(f"/api/tasks/{task['id']}/visualization-results")
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["total"] == 2
+        results = payload["results"]
+        assert [item["item_index"] for item in results] == [0, 1]
+        item = results[0]
+        assert item["item_index"] == 0
+        assert item["mos"] == 5
+        assert item["tags"] == {"score": "ok"}
+        assert item["description_prompts"] == {
+            "adjustment_aigc": "AIGC caption",
+            "adjustment_user": "User instruction",
+            "thinking": "Model thoughts",
+        }
+        unscored = results[1]
+        assert unscored["mos"] is None
+        assert unscored["username"] is None
+        assert unscored["tags"] == {"输出图": {"output": {"quality": "unscored-label"}}}
+        assert unscored["description_prompts"] == {
+            "adjustment_aigc": "Unscored AIGC caption",
+            "adjustment_user": "Unscored user instruction",
+            "thinking": "Unscored model thoughts",
+        }
+
+        paged_response = client.get(f"/api/tasks/{task['id']}/visualization-results?page=1&limit=1")
+        assert paged_response.status_code == 200
+        paged_payload = paged_response.get_json()
+        assert paged_payload["total"] == 2
+        assert [item["item_index"] for item in paged_payload["results"]] == [1]
+    finally:
+        annotations_app.store = old_store
+
+
 def test_assign_subtask_is_exclusive_and_reuses_users_active_subtask():
     from web.annotations.app import AnnotationStore
 
@@ -412,6 +586,31 @@ def test_save_annotation_marks_progress_and_results_filter_by_threshold():
     assert results[0]["username"] == "alice"
     assert results[0]["mos"] == 4
     assert results[0]["tags"] == {"good": True}
+
+
+def test_task_summary_recomputes_annotation_count_from_annotation_files():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"} for idx in range(3)],
+    )
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=3)
+    subtask = store.assign_subtask(task["id"], "alice")
+    store.save_annotation(task["id"], subtask["id"], item_index=0, username="alice", mos=3, tags={})
+    store.save_annotation(task["id"], subtask["id"], item_index=1, username="alice", mos=4, tags={})
+
+    state_data = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    state_data["tasks"][0]["annotation_count"] = 99
+    write_json(tmp_path / "state.json", state_data)
+
+    summary = store.list_tasks()[0]
+
+    assert summary["annotation_count"] == len(store.get_results(task["id"], threshold=1)) == 2
 
 
 def test_results_filter_by_mos_annotator_and_label_dimensions():
@@ -861,6 +1060,26 @@ def test_image_endpoint_caches_resized_preview_in_task_data_dir():
         annotations_app.store = old_store
 
 
+def test_resized_image_file_ignores_incomplete_tmp_preview_cache_files():
+    from web.annotations.app import preview_cache_key, resized_image_file
+
+    tmp_path = make_workspace_tmp()
+    image_path = tmp_path / "large.jpg"
+    cache_dir = tmp_path / "preview_cache"
+    make_test_image(image_path, (2048, 512))
+    cache_dir.mkdir()
+    cache_key = preview_cache_key(image_path)
+    incomplete_tmp_path = cache_dir / f"{cache_key}.jpg.12345.tmp"
+    incomplete_tmp_path.write_bytes(b"incomplete image bytes")
+
+    preview_path, mimetype = resized_image_file(image_path, cache_dir)
+
+    assert preview_path.name == f"{cache_key}.jpg"
+    assert preview_path.exists()
+    assert preview_path.read_bytes() != incomplete_tmp_path.read_bytes()
+    assert mimetype == "image/jpeg"
+
+
 def test_image_endpoint_uses_configured_preview_cache_dir():
     from web.annotations import app as annotations_app
     from web.annotations.app import AnnotationStore
@@ -887,6 +1106,67 @@ def test_image_endpoint_uses_configured_preview_cache_dir():
         assert not (Path(task["data_dir"]) / "preview_cache").exists()
     finally:
         annotations_app.store = old_store
+
+
+def test_preview_cache_job_generates_all_input_image_previews():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore, PreviewCacheJobs
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "0.jpg", (1400, 800))
+    make_test_image(tmp_path / "src" / "1.jpg", (1200, 900))
+    make_test_image(tmp_path / "dst" / "0.jpg", (64, 64))
+    make_test_image(tmp_path / "dst" / "1.jpg", (64, 64))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/0.jpg", "dst_image": "dst/0.jpg"},
+            {"src_image": "src/1.jpg", "dst_image": "dst/1.jpg"},
+        ],
+    )
+
+    old_store = annotations_app.store
+    old_jobs = annotations_app.preview_cache_jobs
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.preview_cache_jobs = PreviewCacheJobs(annotations_app.store)
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=2)
+        client = annotations_app.app.test_client()
+
+        start_response = client.post(f"/api/tasks/{task['id']}/preview-cache/jobs")
+
+        assert start_response.status_code == 202
+        job_id = start_response.get_json()["job"]["id"]
+        for _ in range(50):
+            job_response = client.get(f"/api/tasks/{task['id']}/preview-cache/jobs/{job_id}")
+            job = job_response.get_json()["job"]
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("preview cache job did not complete")
+
+        assert job["progress"] == 100
+        assert job["result"]["total"] == 2
+        assert job["result"]["generated_count"] == 2
+        assert job["result"]["failed_count"] == 0
+        assert len(list((Path(task["data_dir"]) / "preview_cache").glob("*.jpg"))) == 2
+    finally:
+        annotations_app.preview_cache_jobs = old_jobs
+        annotations_app.store = old_store
+
+
+def test_task_list_exposes_input_preview_cache_action_after_visualization():
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+    render_start = script.index("function renderTasks()")
+    render_end = script.index("async function deleteTask", render_start)
+    render_tasks = script[render_start:render_end]
+
+    assert render_tasks.index('data-action="visualization"') < render_tasks.index('data-action="cache-inputs"')
+    assert "缓存输入图" in render_tasks
+    assert "warmInputPreviewCache(taskId, button)" in script
 
 
 def test_preview_cache_dir_can_be_configured_by_environment(monkeypatch):

@@ -311,6 +311,59 @@ def read_image_labels(root_dir: Path, annotation_dir: Path, image_path: str) -> 
     return labels if isinstance(labels, dict) else data
 
 
+def read_image_description_prompts(root_dir: Path, annotation_dir: Path, image_path: str) -> dict[str, str]:
+    empty = {"adjustment_aigc": "", "adjustment_user": "", "thinking": ""}
+
+    def normalize_prompts(parsed: Any) -> dict[str, str]:
+        if not isinstance(parsed, dict):
+            return empty
+        return {
+            key: str(parsed.get(key) or "")
+            for key in empty
+        }
+
+    def parse_prompt_content(content: Any) -> dict[str, str]:
+        if not isinstance(content, str) or not content.strip():
+            return empty
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if lines and lines[0].strip().startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            stripped = "\n".join(lines).strip()
+        try:
+            return normalize_prompts(json.loads(stripped))
+        except json.JSONDecodeError:
+            return empty
+
+    path = label_json_path(root_dir, annotation_dir, image_path)
+    if not path.exists() or not path.is_file():
+        return empty
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError:
+        return empty
+    if not isinstance(data, dict):
+        return empty
+    history = nested_get(data, ["description", "conversation_history"])
+    if not isinstance(history, list):
+        return empty
+    candidate_entries = []
+    if len(history) > 5:
+        candidate_entries.append(history[5])
+    candidate_entries.extend(history)
+    for entry in candidate_entries:
+        if not isinstance(entry, dict):
+            continue
+        prompts = parse_prompt_content(entry.get("content"))
+        if any(prompts.values()):
+            return prompts
+    return empty
+
+
 def merge_labels(target: dict[str, Any], default_group: str, labels: dict[str, Any]) -> None:
     if not labels:
         return
@@ -397,13 +450,25 @@ def preview_cache_key(path: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> str
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
+def cached_preview_path(cache_dir: Path, cache_key: str) -> Path | None:
+    if not cache_dir.exists():
+        return None
+    return next(
+        (
+            candidate
+            for candidate in cache_dir.glob(f"{cache_key}.*")
+            if candidate.is_file() and candidate.stem == cache_key
+        ),
+        None,
+    )
+
+
 def resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> tuple[Path, str]:
     mimetype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
     cache_key = preview_cache_key(path, max_edge)
-    if cache_dir.exists():
-        cached_path = next(cache_dir.glob(f"{cache_key}.*"), None)
-        if cached_path:
-            return cached_path.resolve(), mimetypes.guess_type(str(cached_path))[0] or mimetype
+    cached_path = cached_preview_path(cache_dir, cache_key)
+    if cached_path:
+        return cached_path.resolve(), mimetypes.guess_type(str(cached_path))[0] or mimetype
 
     with Image.open(path) as image:
         image.load()
@@ -997,6 +1062,46 @@ class AnnotationStore:
                 )
             return results
 
+    def get_visualization_results(
+        self,
+        task_id: str,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            root_path = Path(task.get("root_dir") or "")
+            annotation_path = Path(task.get("annotation_dir") or "")
+            annotations = self._read_annotations(task)
+            results = []
+            total = int(task.get("item_count") or len(self._read_items(task)))
+            start = max(0, int(offset))
+            stop = total if limit is None else min(total, start + max(0, int(limit)))
+            for item_index in range(start, stop):
+                item = self._read_item(task, item_index)
+                annotation = annotations.get(str(item_index)) or {}
+                item_labels = item.get("labels", {})
+                results.append(
+                    {
+                        "item_index": item_index,
+                        "src_image": item["src_image"],
+                        "dst_image": item["dst_image"],
+                        "original_tags": item_labels,
+                        "tags": annotation.get("tags", item_labels),
+                        "mos": annotation.get("mos"),
+                        "username": annotation.get("username"),
+                        "updated_at": annotation.get("updated_at"),
+                        "qc_reviewers": qc_reviewers(annotation) if annotation else [],
+                        "qc_history": deepcopy(annotation.get("qc_history", [])) if annotation else [],
+                        "description_prompts": read_image_description_prompts(
+                            root_path,
+                            annotation_path,
+                            item["dst_image"],
+                        ),
+                    }
+                )
+            return total, results
+
     def get_result_filter_options(self, task_id: str) -> dict[str, Any]:
         with self._lock:
             task = self._require_task(self._read_state(), task_id)
@@ -1155,6 +1260,53 @@ class AnnotationStore:
                 )
             return task["name"], results
 
+    def warm_input_preview_cache(self, task_id: str, progress_callback: Any | None = None) -> dict[str, Any]:
+        with self._lock:
+            task = deepcopy(self._require_task(self._read_state(), task_id))
+
+        total = int(task.get("item_count") or len(self._read_items(task)))
+        cache_dir = self.preview_cache_dir(task_id)
+        result = {
+            "total": total,
+            "processed_count": 0,
+            "generated_count": 0,
+            "skipped_count": 0,
+            "failed_count": 0,
+            "failures": [],
+        }
+        if total == 0:
+            if progress_callback:
+                progress_callback(100, "没有输入图需要缓存")
+            return result
+
+        for item_index in range(total):
+            try:
+                item = self._read_item(task, item_index)
+                raw_path = Path(str(item["src_image"]))
+                image_path = raw_path if raw_path.is_absolute() else Path(task["root_dir"]) / raw_path
+                if not image_path.exists() or not image_path.is_file():
+                    raise FileNotFoundError(str(image_path))
+
+                cache_key = preview_cache_key(image_path)
+                had_cached_preview = cached_preview_path(cache_dir, cache_key) is not None
+                preview_path, _ = resized_image_file(image_path, cache_dir)
+                if had_cached_preview or preview_path.resolve() == image_path.resolve():
+                    result["skipped_count"] += 1
+                else:
+                    result["generated_count"] += 1
+            except Exception as exc:  # noqa: BLE001 - keep warming the rest of the task
+                result["failed_count"] += 1
+                result["failures"].append({"item_index": item_index, "error": str(exc)})
+            finally:
+                result["processed_count"] += 1
+                if progress_callback:
+                    percent = round((result["processed_count"] / total) * 100)
+                    progress_callback(percent, f"正在缓存输入图 {result['processed_count']} / {total}")
+
+        if progress_callback:
+            progress_callback(100, "输入图缓存完成")
+        return result
+
     def image_path(self, task_id: str, item_index: int, kind: str) -> Path:
         task = self._require_task(self._read_state(), task_id)
         item = self._read_item(task, int(item_index))
@@ -1177,7 +1329,7 @@ class AnnotationStore:
             "subtask_count": len(task["subtasks"]),
             "assigned_count": assigned,
             "completed_count": completed,
-            "annotation_count": task.get("annotation_count", len(task.get("annotations", {}))),
+            "annotation_count": len(self._read_annotations(task)),
         }
 
     def _subtask_payload(self, task: dict[str, Any], subtask: dict[str, Any]) -> dict[str, Any]:
@@ -1284,8 +1436,60 @@ class CreateTaskJobs:
             self._update(job_id, status="failed", error=str(exc), message=str(exc))
 
 
+class PreviewCacheJobs:
+    def __init__(self, store: AnnotationStore):
+        self.store = store
+        self._lock = threading.RLock()
+        self._jobs: dict[str, dict[str, Any]] = {}
+
+    def start(self, task_id: str) -> dict[str, Any]:
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "task_id": task_id,
+            "status": "running",
+            "progress": 0,
+            "message": "waiting to start",
+            "result": None,
+            "error": None,
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+
+        thread = threading.Thread(target=self._run, args=(job_id, task_id), daemon=True)
+        thread.start()
+        return deepcopy(job)
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return deepcopy(job) if job else None
+
+    def _update(self, job_id: str, **updates: Any) -> None:
+        with self._lock:
+            if job_id in self._jobs:
+                self._jobs[job_id].update(updates)
+
+    def _run(self, job_id: str, task_id: str) -> None:
+        def progress(percent: int, message: str) -> None:
+            self._update(job_id, progress=max(0, min(100, int(percent))), message=message)
+
+        try:
+            result = self.store.warm_input_preview_cache(task_id, progress_callback=progress)
+            self._update(
+                job_id,
+                status="completed",
+                progress=100,
+                message="输入图缓存完成",
+                result=result,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced through job status for the UI
+            self._update(job_id, status="failed", error=str(exc), message=str(exc))
+
+
 store = AnnotationStore()
 create_jobs = CreateTaskJobs(store)
+preview_cache_jobs = PreviewCacheJobs(store)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.json.ensure_ascii = False
 
@@ -1341,6 +1545,23 @@ def api_get_create_task_job(job_id: str):
     job = create_jobs.get(job_id)
     if job is None:
         return jsonify({"error": "create task job not found"}), 404
+    return jsonify({"job": job})
+
+
+@app.post("/api/tasks/<task_id>/preview-cache/jobs")
+def api_start_preview_cache_job(task_id: str):
+    if store.get_task(task_id) is None:
+        return jsonify({"error": "task not found"}), 404
+    preview_cache_jobs.store = store
+    job = preview_cache_jobs.start(task_id)
+    return jsonify({"job": job}), 202
+
+
+@app.get("/api/tasks/<task_id>/preview-cache/jobs/<job_id>")
+def api_get_preview_cache_job(task_id: str, job_id: str):
+    job = preview_cache_jobs.get(job_id)
+    if job is None or job.get("task_id") != task_id:
+        return jsonify({"error": "preview cache job not found"}), 404
     return jsonify({"job": job})
 
 
@@ -1409,6 +1630,16 @@ def api_results(task_id: str):
             "filter_options": store.get_result_filter_options(task_id),
         }
     )
+
+
+@app.get("/api/tasks/<task_id>/visualization-results")
+def api_visualization_results(task_id: str):
+    page = max(0, int(request.args.get("page", 0)))
+    raw_limit = request.args.get("limit")
+    limit = int(raw_limit) if raw_limit not in (None, "") else None
+    offset = page * limit if limit is not None else 0
+    total, results = store.get_visualization_results(task_id, offset=offset, limit=limit)
+    return jsonify({"results": results, "total": total, "page": page, "limit": limit})
 
 
 @app.post("/api/tasks/<task_id>/results/<int:item_index>/qc")

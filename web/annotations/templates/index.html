@@ -126,6 +126,42 @@
       <div id="resultsPagerSlot" class="bottomPager"></div>
     </section>
 
+    <section id="visualizationView" class="hidden">
+      <div class="workHeader">
+        <button id="backFromVisualizationBtn" class="ghost">返回任务</button>
+        <div>
+          <strong id="visualizationTitle"></strong>
+          <span id="visualizationProgress"></span>
+        </div>
+        <div class="pager">
+          <button id="visualizationPrevBtn" class="ghost">上一页</button>
+          <input id="visualizationJumpInput" type="number" min="1">
+          <button id="visualizationJumpBtn" class="ghost">跳转</button>
+          <button id="visualizationNextBtn">下一页</button>
+        </div>
+      </div>
+      <div class="visualizationGrid">
+        <figure>
+          <figcaption>原图</figcaption>
+          <img id="visualizationSrcImage" alt="原图" loading="lazy">
+        </figure>
+        <figure>
+          <figcaption>目标图</figcaption>
+          <img id="visualizationDstImage" alt="目标图" loading="lazy">
+        </figure>
+        <aside class="promptPanel">
+          <h3>文字描述</h3>
+          <div id="visualizationPrompts"></div>
+        </aside>
+        <aside class="tagEditor readonlyResults">
+          <h3>标签和 MOS 分</h3>
+          <div id="visualizationMeta"></div>
+          <div id="visualizationTags"></div>
+        </aside>
+      </div>
+      <div id="visualizationPagerSlot" class="bottomPager"></div>
+    </section>
+
     <section id="statsView" class="hidden">
       <div class="workHeader">
         <button id="backFromStatsBtn" class="ghost">返回任务</button>
