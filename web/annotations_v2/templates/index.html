@@ -38,6 +38,7 @@
           <input id="rootDirInput" placeholder="根目录">
           <input id="jsonlPathInput" placeholder="JSONL 文件路径">
           <input id="labelDirInput" placeholder="标签目录，可留空">
+          <input id="generationPromptDirInput" placeholder="生图 Prompt JSON 根目录，可留空">
           <div class="formGrid">
             <label>粗筛阈值 <input id="roughMinMosInput" type="number" min="1" max="5" value="4"></label>
             <label>精筛阈值 <input id="fineMinMosInput" type="number" min="1" max="5" value="4"></label>
@@ -77,6 +78,10 @@
       <label>
         需要纠错的标签类型
         <textarea id="editLabelPathsInput" rows="5" placeholder="标签纠错路径，例如 输入图/菜品种类"></textarea>
+      </label>
+      <label>
+        生图 Prompt JSON 根目录
+        <input id="editGenerationPromptDirInput" placeholder="/Users/george/data/20260520/output/output_gen_json">
       </label>
       <div class="modalActions">
         <button id="cancelEditTaskBtn" class="ghost" type="button">取消</button>

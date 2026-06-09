@@ -19,6 +19,9 @@ const state = {
 };
 
 const TASK_DELETE_ADMIN_USERNAME = "孙本猿";
+const PRELOAD_FORWARD_PAGES = 3;
+const MAX_PRELOADED_IMAGES = 48;
+const preloadedImages = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,6 +51,108 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function inlineMarkdown(value) {
+  return String(value || "")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+
+function renderMarkdown(value) {
+  const lines = escapeHtml(value).replace(/\r\n/g, "\n").split("\n");
+  const html = [];
+  let paragraph = [];
+  let list = [];
+  let codeBlock = [];
+  let inCodeBlock = false;
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    html.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`);
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!list.length) return;
+    html.push(`<ul>${list.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+    list = [];
+  };
+  const flushCodeBlock = () => {
+    if (!codeBlock.length) return;
+    html.push(`<pre><code>${codeBlock.join("\n")}</code></pre>`);
+    codeBlock = [];
+  };
+
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (inCodeBlock) {
+        flushCodeBlock();
+        inCodeBlock = false;
+      } else {
+        flushParagraph();
+        flushList();
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBlock.push(line);
+      continue;
+    }
+
+    const heading = /^(#{1,4})\s+(.+)$/.exec(line.trim());
+    if (heading) {
+      flushParagraph();
+      flushList();
+      const level = Math.min(4, heading[1].length + 2);
+      html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const bullet = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (bullet) {
+      flushParagraph();
+      list.push(bullet[1]);
+      continue;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    flushList();
+    paragraph.push(line.trim());
+  }
+
+  flushCodeBlock();
+  flushParagraph();
+  flushList();
+  return html.join("") || '<p class="metaText">暂无内容</p>';
+}
+
+function renderGenerationPromptDisclosure(item) {
+  const prompt = String(item?.generation_prompt || "").trim();
+  const promptPath = String(item?.generation_prompt_json_path || "").trim();
+  const title = promptPath ? ` title="${escapeHtml(promptPath)}"` : "";
+  const body = prompt
+    ? `<div class="markdownBody">${renderMarkdown(prompt)}</div>`
+    : '<div class="metaText promptEmpty">未找到 prompt</div>';
+  return `
+    <details class="promptDisclosure"${title}>
+      <summary>生图 Prompt</summary>
+      ${body}
+    </details>
+  `;
+}
+
+function renderImagePrompt(item) {
+  if ($("imagePromptHost")) $("imagePromptHost").innerHTML = renderGenerationPromptDisclosure(item);
+}
+
+function renderVisualizationImagePrompt(item) {
+  if ($("visualizationPromptHost")) $("visualizationPromptHost").innerHTML = renderGenerationPromptDisclosure(item);
 }
 
 function updateSession() {
@@ -193,6 +298,7 @@ async function createTask(event) {
     root_dir: $("rootDirInput").value.trim(),
     jsonl_path: $("jsonlPathInput").value.trim(),
     label_dir: $("labelDirInput").value.trim(),
+    generation_prompt_dir: $("generationPromptDirInput").value.trim(),
     selected_label_paths: parseLabelPaths($("labelPathsInput").value),
     rough: {
       min_mos: Number($("roughMinMosInput").value || 4),
@@ -247,6 +353,10 @@ function taskLabelPathsText(task) {
   return (task?.selected_label_paths || []).map((path) => (path || []).join("/")).join("\n");
 }
 
+function taskGenerationPromptDirText(task) {
+  return task?.generation_prompt_dir || "";
+}
+
 function openEditTaskDialog(taskId) {
   const task = taskById(taskId);
   if (!task) {
@@ -257,6 +367,7 @@ function openEditTaskDialog(taskId) {
   $("editTaskTitle").textContent = `编辑任务：${task.name || taskId}`;
   $("editIssueOptionsInput").value = taskIssueOptionsText(task);
   $("editLabelPathsInput").value = taskLabelPathsText(task);
+  $("editGenerationPromptDirInput").value = taskGenerationPromptDirText(task);
   $("taskEditOverlay").classList.remove("hidden");
   $("taskEditDialog").classList.remove("hidden");
   $("editIssueOptionsInput").focus();
@@ -276,6 +387,7 @@ async function saveTaskEdits(event) {
     body: JSON.stringify({
       rough: { issue_options: parseList($("editIssueOptionsInput").value) },
       selected_label_paths: parseLabelPaths($("editLabelPathsInput").value),
+      generation_prompt_dir: $("editGenerationPromptDirInput").value.trim(),
     }),
   });
   closeEditTaskDialog();
@@ -287,6 +399,33 @@ function taskById(taskId) {
   return state.tasks.find((task) => task.id === taskId) || null;
 }
 
+function stageItemsUrl(taskId, stage, includeHistory = false) {
+  const params = new URLSearchParams({
+    stage,
+    username: state.username,
+  });
+  if (includeHistory) {
+    params.set("include_history", "1");
+  }
+  return `/api/tasks/${taskId}/items?${params.toString()}`;
+}
+
+function itemHasCurrentUserAnnotation(item) {
+  const record = item?.record || {};
+  if (["rough", "fine"].includes(state.stage)) {
+    return Boolean(record[state.stage]?.username);
+  }
+  if (state.stage === "label") {
+    return record.label?.username === state.username;
+  }
+  return false;
+}
+
+function firstUnannotatedItemIndex() {
+  const index = state.items.findIndex((item) => !itemHasCurrentUserAnnotation(item));
+  return index === -1 ? 0 : index;
+}
+
 async function openStage(taskId, stage) {
   state.activeTask = taskById(taskId);
   if (!state.activeTask) {
@@ -296,8 +435,9 @@ async function openStage(taskId, stage) {
   state.stage = stage;
   state.index = 0;
   $("samplePanel")?.classList.add("hidden");
-  const data = await api(`/api/tasks/${taskId}/items?stage=${stage}&username=${encodeURIComponent(state.username)}`);
+  const data = await api(stageItemsUrl(taskId, stage, true));
   state.items = data.items || [];
+  state.index = firstUnannotatedItemIndex();
   $("workbench")?.classList.remove("hidden");
   renderCurrentItem();
 }
@@ -309,14 +449,19 @@ function renderCurrentItem() {
   $("workProgress").textContent = state.items.length ? `${state.index + 1}/${state.items.length}` : "0/0";
   $("emptyStage").classList.toggle("hidden", state.items.length > 0);
   $("stageBody").classList.toggle("hidden", state.items.length === 0);
-  if (!state.items.length) return;
+  if (!state.items.length) {
+    renderImagePrompt(null);
+    return;
+  }
 
   const item = state.items[state.index];
-  $("srcImage").src = item.image_urls.src;
-  $("dstImage").src = item.image_urls.dst;
+  preparePreviewImage($("srcImage"), item.image_urls.src);
+  preparePreviewImage($("dstImage"), item.image_urls.dst);
   $("srcImage").onerror = () => $("srcImage").removeAttribute("src");
   $("dstImage").onerror = () => $("dstImage").removeAttribute("src");
+  renderImagePrompt(item);
   renderStageForm(item);
+  preloadStageNeighbors();
 }
 
 function stageTitle(stage) {
@@ -592,7 +737,7 @@ async function reloadCurrentStageAfterSave(preferredIndex) {
   const stage = state.stage;
   await loadTasks();
   state.activeTask = taskById(taskId);
-  const data = await api(`/api/tasks/${taskId}/items?stage=${stage}&username=${encodeURIComponent(state.username)}`);
+  const data = await api(stageItemsUrl(taskId, stage, true));
   state.items = data.items || [];
   state.index = Math.max(0, Math.min(Math.max(0, state.items.length - 1), preferredIndex));
   renderCurrentItem();
@@ -603,8 +748,13 @@ async function goToItem(nextIndex) {
   const boundedIndex = Math.max(0, Math.min(state.items.length - 1, nextIndex));
   const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;
   if (boundedIndex === state.index && !movingPastLastItem) return;
+  if (nextIndex < state.index) {
+    state.index = boundedIndex;
+    renderCurrentItem();
+    return;
+  }
   if (!(await saveCurrentStageBeforePageChange())) return;
-  const preferredIndex = nextIndex > state.index ? state.index : boundedIndex;
+  const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;
   await reloadCurrentStageAfterSave(preferredIndex);
   if (movingPastLastItem) {
     showToast("已保存");
@@ -822,6 +972,7 @@ function renderVisualizationPage() {
     $("visualizationDstImage").removeAttribute("src");
     setImagePath("visualizationSrcPath", "");
     setImagePath("visualizationDstPath", "");
+    renderVisualizationImagePrompt(null);
     $("visualizationResultPanel").innerHTML = "";
     return;
   }
@@ -832,10 +983,18 @@ function renderVisualizationPage() {
   $("visualizationJumpInput").max = state.visualizationTotal;
   setImagePath("visualizationSrcPath", item.src_relative_path || item.src_image || "");
   setImagePath("visualizationDstPath", item.dst_relative_path || item.dst_image || "");
-  $("visualizationSrcImage").src = item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`;
-  $("visualizationDstImage").src = item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`;
+  preparePreviewImage(
+    $("visualizationSrcImage"),
+    item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`,
+  );
+  preparePreviewImage(
+    $("visualizationDstImage"),
+    item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`,
+  );
   $("visualizationSrcImage").onerror = () => $("visualizationSrcImage").removeAttribute("src");
   $("visualizationDstImage").onerror = () => $("visualizationDstImage").removeAttribute("src");
+  renderVisualizationImagePrompt(item);
+  preloadVisualizationNeighbors().catch((error) => console.warn(error));
 
   if (state.visualizationStage === "rough" || state.visualizationStage === "fine") {
     renderScreeningVisualization(item);
@@ -950,6 +1109,69 @@ function flattenLabelRows(value, prefix = []) {
     }
   }
   return rows;
+}
+
+function preparePreviewImage(image, previewSrc) {
+  image.loading = "eager";
+  image.decoding = "async";
+  image.fetchPriority = "high";
+  if (image.src !== previewSrc) {
+    image.src = previewSrc;
+  }
+  image.dataset.originalSrc = `${previewSrc}?original=1`;
+}
+
+function preloadStageNeighbors() {
+  if (!state.items.length) return;
+  preloadNeighborItems(state.items, state.index);
+}
+
+function preloadNeighborItems(items, currentIndex) {
+  for (let offset = 1; offset <= PRELOAD_FORWARD_PAGES; offset += 1) {
+    const item = items[currentIndex + offset];
+    if (!item) continue;
+    preloadImage(item.image_urls?.src || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/src`);
+    preloadImage(item.image_urls?.dst || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/dst`);
+  }
+}
+
+async function preloadVisualizationNeighbors() {
+  if (!state.visualizationTotal) return;
+  const pages = [];
+  for (let offset = 1; offset <= PRELOAD_FORWARD_PAGES; offset += 1) {
+    const page = state.visualizationPage + offset;
+    if (page < state.visualizationTotal) pages.push(page);
+  }
+  await Promise.all(pages.map((page) => preloadVisualizationPageImages(page)));
+}
+
+async function preloadVisualizationPageImages(page) {
+  const params = new URLSearchParams({
+    stage: state.visualizationStage,
+    page: String(page),
+    limit: "1",
+  });
+  if (hasActiveVisualizationFilters()) {
+    params.set("filters", JSON.stringify(buildVisualizationFilterPayload()));
+  }
+  const data = await api(`/api/tasks/${state.taskId}/visualization-results?${params.toString()}`);
+  const item = (data.results || [])[0];
+  if (!item) return;
+  preloadImage(item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
+  preloadImage(item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
+}
+
+function preloadImage(src) {
+  if (!src || preloadedImages.has(src)) return;
+  const image = new Image();
+  image.loading = "eager";
+  image.decoding = "async";
+  image.src = src;
+  preloadedImages.set(src, image);
+  if (preloadedImages.size > MAX_PRELOADED_IMAGES) {
+    const oldestKey = preloadedImages.keys().next().value;
+    preloadedImages.delete(oldestKey);
+  }
 }
 
 function resultRow(label, value) {

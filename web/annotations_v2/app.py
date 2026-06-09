@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import mimetypes
 import os
 import random
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -13,11 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, abort, jsonify, render_template, request, send_file
+from PIL import Image
 from web.annotations.label_options import LABEL_OPTION_GROUPS
 
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_STATE_PATH = APP_DIR / "data" / "state.json"
+IMAGE_PREVIEW_MAX_EDGE = 1024
+STATE_PATH_ENV = "ANNOTATIONS_V2_STATE_PATH"
+DATA_DIR_ENV = "ANNOTATIONS_V2_DATA_DIR"
+PREVIEW_CACHE_DIR_ENV = "ANNOTATIONS_V2_PREVIEW_CACHE_DIR"
 INPUT_GROUP_NAME = "输入图"
 OUTPUT_GROUP_NAME = "输出图"
 VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
@@ -300,6 +307,127 @@ def safe_download_name(name: str, suffix: str) -> str:
     return f"{safe or 'annotations_v2'}_{suffix}"
 
 
+def clean_optional_path(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def stringify_generation_prompt(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    return str(value)
+
+
+def generation_prompt_relative_json_path(root_dir: Path, dst_image: Any) -> Path:
+    raw_path = Path(str(dst_image or ""))
+    image_path = raw_path if raw_path.is_absolute() else root_dir / raw_path
+    try:
+        relative_path = image_path.relative_to(root_dir)
+    except ValueError:
+        relative_path = Path(raw_path.name) if raw_path.is_absolute() else raw_path
+    return relative_path.with_suffix(".json")
+
+
+def generation_prompt_candidates(prompt_dir: Path, root_dir: Path, dst_image: Any) -> list[Path]:
+    relative_json_path = generation_prompt_relative_json_path(root_dir, dst_image)
+    candidates = [prompt_dir / relative_json_path]
+    parts = relative_json_path.parts
+    if len(parts) > 1:
+        candidates.append(prompt_dir.joinpath(*parts[1:]))
+    candidates.append(prompt_dir / relative_json_path.name)
+
+    unique_candidates = []
+    seen = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def build_generation_prompt_filename_index(prompt_dir: Path) -> dict[str, Path]:
+    if not prompt_dir.exists() or not prompt_dir.is_dir():
+        return {}
+    index: dict[str, Path] = {}
+    for path in prompt_dir.rglob("*.json"):
+        index.setdefault(path.name, path)
+    return index
+
+
+def read_generation_prompt_json(path: Path) -> str:
+    try:
+        data = read_json_file(path, {})
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return stringify_generation_prompt(data.get("original_plan"))
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def preview_cache_key(path: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> str:
+    resolved = path.resolve()
+    stat = resolved.stat()
+    raw_key = f"{resolved}|{stat.st_mtime_ns}|{stat.st_size}|{max_edge}"
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
+
+def cached_preview_path(cache_dir: Path, cache_key: str) -> Path | None:
+    if not cache_dir.exists():
+        return None
+    return next(
+        (
+            candidate
+            for candidate in cache_dir.glob(f"{cache_key}.*")
+            if candidate.is_file() and candidate.stem == cache_key
+        ),
+        None,
+    )
+
+
+def resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> tuple[Path, str]:
+    mimetype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    cache_key = preview_cache_key(path, max_edge)
+    cached_path = cached_preview_path(cache_dir, cache_key)
+    if cached_path:
+        return cached_path.resolve(), mimetypes.guess_type(str(cached_path))[0] or mimetype
+
+    with Image.open(path) as image:
+        image.load()
+        if max(image.size) <= max_edge:
+            return path.resolve(), mimetype
+
+        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        image_format = (image.format or path.suffix.lstrip(".") or "JPEG").upper()
+        if image_format == "JPG":
+            image_format = "JPEG"
+        if image_format == "JPEG" and image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+
+        suffix = ".jpg" if image_format == "JPEG" else f".{image_format.lower()}"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = cache_dir / f"{cache_key}{suffix}"
+        if cache_path.exists():
+            return cache_path.resolve(), Image.MIME.get(image_format, mimetype)
+
+        tmp_path = cache_path.with_name(f"{cache_path.name}.{threading.get_ident()}.tmp")
+        image.save(tmp_path, format=image_format, quality=88, optimize=True)
+        os.replace(tmp_path, cache_path)
+        return cache_path.resolve(), Image.MIME.get(image_format, mimetype)
+
+
 def require_task_delete_admin(payload: dict[str, Any]) -> None:
     username = str(payload.get("username") or "").strip()
     if username != TASK_DELETE_ADMIN_USERNAME:
@@ -307,8 +435,27 @@ def require_task_delete_admin(payload: dict[str, Any]) -> None:
 
 
 class AnnotationV2Store:
-    def __init__(self, state_path: str | os.PathLike[str] = DEFAULT_STATE_PATH):
-        self.state_path = Path(state_path)
+    def __init__(
+        self,
+        state_path: str | os.PathLike[str] | None = None,
+        data_root: str | os.PathLike[str] | None = None,
+        preview_cache_dir: str | os.PathLike[str] | None = None,
+    ):
+        configured_state_path = state_path or os.environ.get(STATE_PATH_ENV) or DEFAULT_STATE_PATH
+        configured_data_root = data_root or os.environ.get(DATA_DIR_ENV)
+        configured_preview_cache_dir = preview_cache_dir or os.environ.get(PREVIEW_CACHE_DIR_ENV)
+
+        self.state_path = Path(configured_state_path).expanduser()
+        self.task_data_root = (
+            Path(configured_data_root).expanduser()
+            if configured_data_root
+            else self.state_path.parent / "tasks"
+        )
+        self.preview_cache_root = (
+            Path(configured_preview_cache_dir).expanduser()
+            if configured_preview_cache_dir
+            else None
+        )
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.state_path.exists():
             self._write_state({"tasks": []})
@@ -320,7 +467,12 @@ class AnnotationV2Store:
         write_json_file(self.state_path, state)
 
     def _task_data_dir(self, task_id: str) -> Path:
-        return self.state_path.parent / "tasks" / task_id
+        return self.task_data_root / task_id
+
+    def preview_cache_dir(self, task_id: str) -> Path:
+        if self.preview_cache_root:
+            return self.preview_cache_root / task_id
+        return self._task_data_dir(task_id) / "preview_cache"
 
     def _items_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "items.json"
@@ -342,7 +494,65 @@ class AnnotationV2Store:
         for item in items:
             if isinstance(item, dict):
                 item["labels"] = sanitize_labels(item.get("labels", {}))
+                item.setdefault("generation_prompt", "")
+                item.setdefault("generation_prompt_json_path", "")
         return items
+
+    def _generation_prompt_for_item(
+        self,
+        prompt_dir: Path,
+        root_dir: Path,
+        item: dict[str, Any],
+        filename_index: dict[str, Path],
+    ) -> tuple[str, str]:
+        for candidate in generation_prompt_candidates(prompt_dir, root_dir, item.get("dst_image")):
+            if candidate.exists() and candidate.is_file():
+                prompt = read_generation_prompt_json(candidate)
+                return prompt, str(candidate) if prompt else ""
+
+        fallback_name = generation_prompt_relative_json_path(root_dir, item.get("dst_image")).name
+        fallback_path = filename_index.get(fallback_name)
+        if fallback_path:
+            prompt = read_generation_prompt_json(fallback_path)
+            return prompt, str(fallback_path) if prompt else ""
+        return "", ""
+
+    def _apply_generation_prompts(self, task: dict[str, Any], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        prompt_dir_value = clean_optional_path(task.get("generation_prompt_dir"))
+        if not prompt_dir_value:
+            for item in items:
+                item["generation_prompt"] = ""
+                item["generation_prompt_json_path"] = ""
+            return items
+
+        prompt_dir = Path(prompt_dir_value).expanduser()
+        root_dir = Path(str(task.get("root_dir") or "")).expanduser()
+        filename_index: dict[str, Path] | None = None
+        for item in items:
+            prompt = ""
+            prompt_path = ""
+            for candidate in generation_prompt_candidates(prompt_dir, root_dir, item.get("dst_image")):
+                if candidate.exists() and candidate.is_file():
+                    prompt = read_generation_prompt_json(candidate)
+                    prompt_path = str(candidate) if prompt else ""
+                    break
+            if not prompt:
+                if filename_index is None:
+                    filename_index = build_generation_prompt_filename_index(prompt_dir)
+                prompt, prompt_path = self._generation_prompt_for_item(
+                    prompt_dir,
+                    root_dir,
+                    item,
+                    filename_index,
+                )
+            item["generation_prompt"] = prompt
+            item["generation_prompt_json_path"] = prompt_path
+        return items
+
+    def _refresh_generation_prompts(self, task: dict[str, Any]) -> None:
+        items = self._read_items(task)
+        self._apply_generation_prompts(task, items)
+        write_json_file(self._items_path(task), items)
 
     def _read_records(self, task: dict[str, Any]) -> dict[str, Any]:
         records = read_json_file(self._records_path(task), {})
@@ -680,6 +890,7 @@ class AnnotationV2Store:
             "root_dir": str(root_dir),
             "jsonl_path": str(jsonl_path),
             "label_dir": str(label_dir) if label_dir is not None else "",
+            "generation_prompt_dir": clean_optional_path(payload.get("generation_prompt_dir")),
             "data_dir": str(self._task_data_dir(task_id)),
             "created_at": utc_now(),
             "item_count": len(items),
@@ -697,6 +908,7 @@ class AnnotationV2Store:
             },
             "selected_label_paths": normalize_label_paths(payload.get("selected_label_paths")),
         }
+        self._apply_generation_prompts(task, items)
         write_json_file(self._items_path(task), items)
         write_json_file(self._records_path(task), {})
         state = self._read_state()
@@ -731,6 +943,9 @@ class AnnotationV2Store:
             )
         if "selected_label_paths" in payload:
             task["selected_label_paths"] = normalize_label_paths(payload.get("selected_label_paths"))
+        if "generation_prompt_dir" in payload:
+            task["generation_prompt_dir"] = clean_optional_path(payload.get("generation_prompt_dir"))
+            self._refresh_generation_prompts(task)
 
         self._write_state(state)
         return self._task_payload(task)
@@ -804,31 +1019,63 @@ class AnnotationV2Store:
             "label_completed": label_completed,
         }
 
-    def list_stage_items(self, task_id: str, stage: str, username: str = "") -> list[dict[str, Any]]:
+    def list_stage_items(
+        self,
+        task_id: str,
+        stage: str,
+        username: str = "",
+        include_history: bool = False,
+    ) -> list[dict[str, Any]]:
         task = self._require_task(task_id)
         records = self._read_records(task)
         items = self._read_items(task)
         stage = str(stage or "rough")
         username = str(username or "").strip()
+        include_history = bool(include_history and username)
         result = []
         for item in items:
             record = records.get(str(item["item_index"]), {})
+            user_screen_annotation = (
+                self._annotation_for_user(record, stage, username) if username and stage in {"rough", "fine"} else None
+            )
+            label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+            has_user_label = bool(username and stage == "label" and label_record.get("username") == username)
             if stage == "fine" and (
                 not self._stage_complete(task, record, "rough") or not self._rough_passes(task, record.get("rough"))
             ):
                 continue
-            if stage == "label" and (not record.get("sampled") or record.get("label")):
+            if stage == "label" and (
+                not record.get("sampled") or (record.get("label") and not (include_history and has_user_label))
+            ):
                 continue
             if stage not in {"rough", "fine", "label"}:
                 raise ValueError("未知阶段")
             if username and stage in {"rough", "fine"}:
                 target = self._stage_target(task, stage)
-                if self._annotation_for_user(record, stage, username) is not None:
+                if user_screen_annotation is not None and not include_history:
                     continue
-                if self._annotation_count(record, stage) >= target:
+                if user_screen_annotation is None and self._annotation_count(record, stage) >= target:
                     continue
             result.append(self._item_payload(task, item, record, stage=stage, username=username))
-        return self._sort_allocated_items(result, records, stage, username)
+        sorted_result = self._sort_allocated_items(result, records, stage, username)
+        if include_history:
+            sorted_result = sorted(
+                sorted_result,
+                key=lambda item: 0 if self._payload_has_user_annotation(item, stage, username) else 1,
+            )
+        return sorted_result
+
+    def _payload_has_user_annotation(self, item: dict[str, Any], stage: str, username: str) -> bool:
+        if not username:
+            return False
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        if stage in {"rough", "fine"}:
+            annotation = record.get(stage) if isinstance(record.get(stage), dict) else {}
+            return annotation.get("username") == username
+        if stage == "label":
+            label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+            return label_record.get("username") == username
+        return False
 
     def _item_payload(
         self,
@@ -1188,6 +1435,8 @@ class AnnotationV2Store:
             "dst_image": item["dst_image"],
             "src_relative_path": image_relative_path(task.get("root_dir"), item["src_image"]),
             "dst_relative_path": image_relative_path(task.get("root_dir"), item["dst_image"]),
+            "generation_prompt": item.get("generation_prompt", ""),
+            "generation_prompt_json_path": item.get("generation_prompt_json_path", ""),
             "image_urls": {
                 "src": f"/api/tasks/{task['id']}/images/{item['item_index']}/src",
                 "dst": f"/api/tasks/{task['id']}/images/{item['item_index']}/dst",
@@ -1378,6 +1627,8 @@ class AnnotationV2Store:
                 "item_index": item["item_index"],
                 "src_image": item["src_image"],
                 "dst_image": item["dst_image"],
+                "generation_prompt": item.get("generation_prompt", ""),
+                "generation_prompt_json_path": item.get("generation_prompt_json_path", ""),
                 "original_labels": item.get("labels", {}),
                 "rough": record.get("rough"),
                 "rough_annotations": record.get("rough_annotations", []),
@@ -1476,6 +1727,7 @@ def api_stage_items(task_id: str):
                 task_id,
                 request.args.get("stage", "rough"),
                 username=request.args.get("username", ""),
+                include_history=clean_bool(request.args.get("include_history", False)),
             )
         }
     )
@@ -1555,7 +1807,11 @@ def api_image(task_id: str, item_index: int, kind: str):
     image_path = store.image_path(task_id, item_index, kind)
     if not image_path.exists() or not image_path.is_file():
         abort(404)
-    return send_file(image_path.resolve(), mimetype=mimetypes.guess_type(str(image_path))[0] or "application/octet-stream")
+    mimetype = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
+    if truthy(request.args.get("original")):
+        return send_file(image_path.resolve(), mimetype=mimetype)
+    preview_path, preview_mimetype = resized_image_file(image_path, store.preview_cache_dir(task_id))
+    return send_file(preview_path, mimetype=preview_mimetype, conditional=True)
 
 
 if __name__ == "__main__":

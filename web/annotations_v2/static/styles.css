@@ -373,6 +373,84 @@ figcaption {
   background: #eef1f4;
 }
 
+.promptDisclosure {
+  min-width: 0;
+  border: 1px solid #e5e9ef;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.imagePromptHost {
+  grid-column: 1 / span 2;
+  min-width: 0;
+}
+
+#ratingControls,
+#visualizationResultPanel {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.promptDisclosure summary {
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.promptDisclosure[open] summary {
+  border-bottom: 1px solid #e5e9ef;
+}
+
+.promptEmpty {
+  padding: 10px;
+}
+
+.markdownBody {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.markdownBody h3,
+.markdownBody h4,
+.markdownBody h5,
+.markdownBody h6 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.markdownBody p,
+.markdownBody ul,
+.markdownBody pre {
+  margin: 0;
+}
+
+.markdownBody ul {
+  padding-left: 18px;
+}
+
+.markdownBody code {
+  border-radius: 4px;
+  padding: 1px 4px;
+  background: #edf0f3;
+  font-size: 12px;
+}
+
+.markdownBody pre code {
+  padding: 0;
+  background: transparent;
+}
+
 .imagePath {
   min-height: 18px;
   overflow: hidden;
@@ -838,5 +916,15 @@ pre {
 
   .tagRow {
     grid-template-columns: 1fr;
+  }
+
+  .imagePromptHost {
+    grid-column: 1;
+  }
+
+  #ratingControls,
+  #visualizationResultPanel {
+    grid-column: 1;
+    grid-row: auto;
   }
 }

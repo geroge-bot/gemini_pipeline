@@ -1,5 +1,6 @@
 import json
 import sys
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,6 +24,13 @@ def write_jsonl(path, rows):
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+def make_test_image(path, size):
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", size, color=(20, 120, 220)).save(path, format="JPEG")
 
 
 def test_v2_task_creation_loads_jsonl_and_label_files():
@@ -50,6 +58,164 @@ def test_v2_task_creation_loads_jsonl_and_label_files():
     assert task["name"] == "v2 food"
     assert items[0]["labels"] == {"输入图": {"菜品种类": "中餐"}, "输出图": {"美学评分": 4}}
     assert store.summary(task["id"])["total"] == 1
+
+
+def test_v2_task_creation_loads_generation_prompt_from_user_json_root():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    prompt_dir = tmp_path / "output_gen_json"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "ori_image/酒水饮料/a.jpg",
+                "dst_image": "output_gen/酒水饮料/a_p1_方案_1_12345.jpg",
+            }
+        ],
+    )
+    write_json(
+        prompt_dir / "酒水饮料" / "a_p1_方案_1_12345.json",
+        {"original_plan": "### 方案 1\n\n- 放低机位\n- 增强纵深"},
+    )
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "prompt task",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "generation_prompt_dir": str(prompt_dir),
+        }
+    )
+
+    item = store.list_stage_items(task["id"], "rough")[0]
+    total, rows = store.get_visualization_results(task["id"], "rough")
+
+    assert task["generation_prompt_dir"] == str(prompt_dir)
+    assert item["generation_prompt"] == "### 方案 1\n\n- 放低机位\n- 增强纵深"
+    assert item["generation_prompt_json_path"].endswith("a_p1_方案_1_12345.json")
+    assert rows[0]["generation_prompt"] == item["generation_prompt"]
+
+
+def test_v2_update_task_generation_prompt_dir_refreshes_existing_items():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    prompt_dir = tmp_path / "output_gen_json"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": "ori_image/甜品/a.jpg", "dst_image": "output_gen/甜品/a_p2_方案_2_777.jpg"}],
+    )
+    write_json(prompt_dir / "甜品" / "a_p2_方案_2_777.json", {"original_plan": {"title": "甜品特写"}})
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    assert store.list_stage_items(task["id"], "rough")[0].get("generation_prompt") == ""
+
+    store.update_task(task["id"], {"generation_prompt_dir": str(prompt_dir)})
+    item = store.list_stage_items(task["id"], "rough")[0]
+
+    assert '"title": "甜品特写"' in item["generation_prompt"]
+    assert item["generation_prompt_json_path"].endswith("a_p2_方案_2_777.json")
+
+
+def test_v2_task_data_dir_can_be_configured_separately_from_state_path():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    data_root = tmp_path / "annotation-records"
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state" / "state.json", data_root=data_root)
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    assert Path(task["data_dir"]).parent == data_root
+    assert (data_root / task["id"] / "items.json").exists()
+    assert (data_root / task["id"] / "records.json").exists()
+    assert not (tmp_path / "state" / "tasks" / task["id"]).exists()
+
+
+def test_v2_store_paths_can_be_configured_by_environment(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    state_path = tmp_path / "configured" / "state.json"
+    data_root = tmp_path / "configured-data"
+    preview_cache_root = tmp_path / "configured-preview-cache"
+    monkeypatch.setenv("ANNOTATIONS_V2_STATE_PATH", str(state_path))
+    monkeypatch.setenv("ANNOTATIONS_V2_DATA_DIR", str(data_root))
+    monkeypatch.setenv("ANNOTATIONS_V2_PREVIEW_CACHE_DIR", str(preview_cache_root))
+
+    store = AnnotationV2Store()
+
+    assert store.state_path == state_path
+    assert store._task_data_dir("task-1") == data_root / "task-1"
+    assert store.preview_cache_dir("task-1") == preview_cache_root / "task-1"
+
+
+def test_v2_image_endpoint_limits_long_edge_by_default_and_can_return_original():
+    from PIL import Image
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "large.jpg", (2048, 512))
+    make_test_image(tmp_path / "dst" / "small.jpg", (64, 64))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/large.jpg", "dst_image": "dst/small.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        client = annotations_v2_app.app.test_client()
+
+        preview_response = client.get(f"/api/tasks/{task['id']}/images/0/src")
+        original_response = client.get(f"/api/tasks/{task['id']}/images/0/src?original=1")
+
+        preview = Image.open(BytesIO(preview_response.data))
+        original = Image.open(BytesIO(original_response.data))
+        assert preview_response.status_code == 200
+        assert original_response.status_code == 200
+        assert max(preview.size) == 1024
+        assert original.size == (2048, 512)
+    finally:
+        annotations_v2_app.store = old_store
+
+
+def test_v2_image_endpoint_caches_resized_preview_in_configured_dir():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "large.jpg", (2048, 512))
+    make_test_image(tmp_path / "dst" / "small.jpg", (64, 64))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/large.jpg", "dst_image": "dst/small.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        client = annotations_v2_app.app.test_client()
+
+        response = client.get(f"/api/tasks/{task['id']}/images/0/src")
+
+        assert response.status_code == 200
+        cached_files = list((preview_cache_root / task["id"]).glob("*.jpg"))
+        assert len(cached_files) == 1
+        assert cached_files[0].stat().st_size == len(response.data)
+        assert not (Path(task["data_dir"]) / "preview_cache").exists()
+    finally:
+        annotations_v2_app.store = old_store
 
 
 def test_v2_task_creation_removes_non_canonical_ai_label_fields():
@@ -877,6 +1043,84 @@ def test_v2_stage_items_do_not_reload_records_already_annotated_by_same_user():
     assert 0 in dora_fine_indexes
 
 
+def test_v2_stage_items_can_include_only_current_user_history_for_paging():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+            {"src_image": "src/c.jpg", "dst_image": "dst/c.jpg"},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "history paging",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "rough": {"annotator_count": 2, "min_mos": 4},
+        }
+    )
+
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    store.save_rough(task["id"], 1, {"username": "bob", "mos": 5, "has_defect": False})
+
+    default_indexes = [item["item_index"] for item in store.list_stage_items(task["id"], "rough", username="alice")]
+    history_items = store.list_stage_items(task["id"], "rough", username="alice", include_history=True)
+    history_indexes = [item["item_index"] for item in history_items]
+
+    assert 0 not in default_indexes
+    assert 0 in history_indexes
+    assert 1 in history_indexes
+    assert history_indexes.index(0) < history_indexes.index(2)
+    assert history_items[history_indexes.index(0)]["record"]["rough"]["username"] == "alice"
+    assert "rough" not in history_items[history_indexes.index(1)]["record"]
+
+
+def test_v2_label_stage_history_is_scoped_to_current_user():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+            {"src_image": "src/c.jpg", "dst_image": "dst/c.jpg", "labels": {"输入图": {"菜品种类": "甜品"}}},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "label history",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+    for item_index in range(3):
+        store.save_rough(task["id"], item_index, {"username": "rough", "mos": 5, "has_defect": False})
+        store.save_fine(task["id"], item_index, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+
+    store.save_label(task["id"], 0, {"username": "alice", "labels": {"输入图": {"菜品种类": "融合菜"}}})
+    store.save_label(task["id"], 1, {"username": "bob", "labels": {"输入图": {"菜品种类": "西餐"}}})
+
+    default_indexes = [item["item_index"] for item in store.list_stage_items(task["id"], "label", username="alice")]
+    history_items = store.list_stage_items(task["id"], "label", username="alice", include_history=True)
+    history_indexes = [item["item_index"] for item in history_items]
+
+    assert default_indexes == [2]
+    assert history_indexes == [0, 2]
+    assert history_items[0]["record"]["label"]["username"] == "alice"
+    assert history_items[0]["record"]["label_draft"]["labels"] == {"输入图": {"菜品种类": "融合菜"}}
+
+
 def test_v2_fine_assignment_waits_for_required_rough_votes_and_aggregate_pass():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -1264,9 +1508,59 @@ def test_v2_rate_paging_saves_forward_boundary_item_before_returning():
     assert "const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;" in script
     assert "if (boundedIndex === state.index && !movingPastLastItem) return;" in script
     assert "if (!(await saveCurrentStageBeforePageChange())) return;" in script
-    assert "const preferredIndex = nextIndex > state.index ? state.index : boundedIndex;" in script
+    assert "const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;" in script
     assert "await reloadCurrentStageAfterSave(preferredIndex);" in script
     assert "if (movingPastLastItem) {" in script
+
+
+def test_v2_rate_paging_reloads_with_user_history_but_initial_entry_does_not():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    open_stage_start = script.index("async function openStage")
+    render_current_start = script.index("function renderCurrentItem", open_stage_start)
+    open_stage_body = script[open_stage_start:render_current_start]
+    reload_start = script.index("async function reloadCurrentStageAfterSave")
+    go_to_start = script.index("async function goToItem", reload_start)
+    reload_body = script[reload_start:go_to_start]
+    go_to_end = script.index("function goNextItem", go_to_start)
+    go_to_body = script[go_to_start:go_to_end]
+
+    assert "function stageItemsUrl(taskId, stage, includeHistory = false)" in script
+    assert "params.set(\"include_history\", \"1\");" in script
+    assert "stageItemsUrl(taskId, stage, true)" in open_stage_body
+    assert "state.index = firstUnannotatedItemIndex();" in open_stage_body
+    assert "stageItemsUrl(taskId, stage, true)" in reload_body
+    assert "const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;" in go_to_body
+
+
+def test_v2_rate_previous_page_does_not_require_saving_current_item():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    go_to_start = script.index("async function goToItem")
+    go_to_end = script.index("function goNextItem", go_to_start)
+    go_to_body = script[go_to_start:go_to_end]
+    previous_branch_start = go_to_body.index("if (nextIndex < state.index)")
+    previous_branch_end = go_to_body.index("if (!(await saveCurrentStageBeforePageChange())) return;")
+    previous_branch = go_to_body[previous_branch_start:previous_branch_end]
+
+    assert "function itemHasCurrentUserAnnotation(item)" in script
+    assert "function firstUnannotatedItemIndex()" in script
+    assert "if (nextIndex < state.index)" in go_to_body
+    assert "state.index = boundedIndex;" in previous_branch
+    assert "renderCurrentItem();" in previous_branch
+    assert "saveCurrentStageBeforePageChange" not in previous_branch
+
+
+def test_v2_screening_forms_load_existing_user_annotation_values():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    render_start = script.index("function renderStageForm")
+    render_end = script.index("function fineDefaultRecord", render_start)
+    render_body = script[render_start:render_end]
+
+    assert "const current = record.rough || {};" in render_body
+    assert "const current = fineDefaultRecord(record);" in render_body
+    assert "${mosField(current.mos)}" in render_body
+    assert "${defectField(current.has_defect)}" in render_body
+    assert "${issueCheckboxes(current.issues || [])}" in render_body
+    assert 'const checked = selectedValue === score ? "checked" : "";' in script
 
 
 def test_v2_save_button_refreshes_queue_without_skipping_or_wrapping():
@@ -1305,7 +1599,7 @@ def test_v2_frontend_supports_multi_annotator_assignment_and_round_progress():
     assert 'annotator_count: Number($("fineAnnotatorCountInput").value || 1)' in script
     assert "screeningProgressCells" in script
     assert "第 ${round.round} 人" in script
-    assert "username=${encodeURIComponent(state.username)}" in script
+    assert "username: state.username" in script
     assert "goToItem(state.index - 1)" in script
     assert "await saveCurrentStageBeforePageChange()" in script
     assert "请选择 MOS 分后再翻页" in script
@@ -1319,6 +1613,54 @@ def test_v2_fine_form_defaults_to_rough_result_for_fast_acceptance():
     assert "return record.fine || record.rough || {};" in script
     assert "const current = fineDefaultRecord(record);" in script
     assert "goToItem(state.index + 1)" in script
+
+
+def test_v2_frontend_preloads_next_three_preview_pages():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "const PRELOAD_FORWARD_PAGES = 3;" in script
+    assert "const preloadedImages = new Map();" in script
+    assert "function preparePreviewImage(image, previewSrc)" in script
+    assert 'image.fetchPriority = "high";' in script
+    assert 'preparePreviewImage($("srcImage"), item.image_urls.src);' in script
+    assert 'preparePreviewImage($("dstImage"), item.image_urls.dst);' in script
+    assert "function preloadStageNeighbors()" in script
+    assert "function preloadNeighborItems(items, currentIndex)" in script
+    assert "offset <= PRELOAD_FORWARD_PAGES" in script
+    assert "preloadStageNeighbors();" in script
+    assert "function preloadVisualizationNeighbors()" in script
+    assert "preloadVisualizationNeighbors().catch((error) => console.warn(error));" in script
+    assert "function preloadVisualizationPageImages(page)" in script
+
+
+def test_v2_frontend_renders_collapsed_generation_prompt_markdown_below_images():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    styles = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "styles.css").read_text(encoding="utf-8")
+    rate_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "rate.html").read_text(encoding="utf-8")
+    visualize_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "visualize.html").read_text(encoding="utf-8")
+    index_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert 'generation_prompt_dir: $("generationPromptDirInput").value.trim(),' in script
+    assert 'generation_prompt_dir: $("editGenerationPromptDirInput").value.trim(),' in script
+    assert "function renderGenerationPromptDisclosure(item)" in script
+    assert "function renderMarkdown(value)" in script
+    assert "renderImagePrompt(item);" in script
+    assert "renderVisualizationImagePrompt(item);" in script
+    assert "imagePromptHost" in rate_template
+    assert "srcPromptHost" not in rate_template
+    assert "dstPromptHost" not in rate_template
+    assert "visualizationPromptHost" in visualize_template
+    assert "visualizationSrcPromptHost" not in visualize_template
+    assert "visualizationDstPromptHost" not in visualize_template
+    assert "generationPromptDirInput" in index_template
+    assert "editGenerationPromptDirInput" in index_template
+    assert ".promptDisclosure" in styles
+    assert ".imagePromptHost" in styles
+    assert "#ratingControls" in styles
+    assert "#visualizationResultPanel" in styles
+    assert "grid-column: 3;" in styles
+    assert "grid-row: 1 / span 2;" in styles
+    assert ".markdownBody" in styles
 
 
 def test_v2_label_correction_uses_choice_bars_instead_of_text_inputs():
