@@ -37,9 +37,9 @@ DEFAULT_OUTPUT_DIRECTORY = r"D:\test\food_test_output"
 
 # ====================== Default Service Names (services.md) ======================
 # These names correspond to entries in pipeline/utils/services.md
-DEFAULT_SERVICE_TEXT = "az_text"
+DEFAULT_SERVICE_TEXT = "az_middle_text"
 DEFAULT_SERVICE_IMAGE = "yunwu_image"
-DEFAULT_SERVICE_GEMINI_TEXT = "az_text"
+DEFAULT_SERVICE_GEMINI_TEXT = "az_middle_text"
 DEFAULT_SERVICE_GEMINI_IMAGE = "yunwu_image"
 
 # ====================== Pipeline Defaults ======================

@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from pipeline.config import DEFAULT_MODEL_ANALYSIS, DEFAULT_SERVICE_TEXT
 from pipeline.modules.two_image_labeler import TwoImageLabelingModule
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.client_factory import create_client_from_service
 
 
@@ -20,7 +21,9 @@ PairLabeler = Callable[[Path, Path], dict]
 
 
 def _path_from_record(value: str | Path) -> Path:
-    return value if isinstance(value, Path) else Path(value)
+    if isinstance(value, Path):
+        return value
+    return Path(value.replace("\\", "/"))
 
 
 def _resolve_input_path(input_root: Path, value: str | Path) -> Path:
@@ -43,6 +46,10 @@ def _relative_output_path(input_root: Path, value: str | Path) -> Path:
 
 def get_output_json_path(output_dir: str | Path, generated_relative_path: str | Path) -> Path:
     generated_relative_path = _path_from_record(generated_relative_path)
+    generated_relative_path_str = str(generated_relative_path)
+    if "\\" in generated_relative_path_str:
+        parent, name = generated_relative_path_str.rsplit("\\", 1)
+        return Path(output_dir) / parent / Path(name).with_suffix(".json")
     return Path(output_dir) / generated_relative_path.with_suffix(".json")
 
 
@@ -73,6 +80,11 @@ def _load_existing_json(path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"Existing JSON is not an object: {path}")
     return data
+
+
+def _last_call_id_from_callable(func: PairLabeler) -> str | None:
+    client = getattr(func, "api_client", None)
+    return getattr(client, "last_call_id", None)
 
 
 def label_pair_with_module(
@@ -151,6 +163,11 @@ def label_pairs_jsonl(
         out_json.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
+        )
+        log_result_saved(
+            call_id=_last_call_id_from_callable(label_func),
+            result_path=str(out_json),
+            result_kind="json",
         )
         return index, dst_image, out_json
 
@@ -239,6 +256,7 @@ def main() -> None:
             client=client,
             model=args.model,
         )
+    label_func.api_client = client
 
     stats = label_pairs_jsonl(
         jsonl_path=args.jsonl_path,

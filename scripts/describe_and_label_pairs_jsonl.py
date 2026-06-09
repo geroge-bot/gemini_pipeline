@@ -12,6 +12,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.config import DEFAULT_MODEL_ANALYSIS, DEFAULT_SERVICE_TEXT
+from pipeline.modules.user_guide_generator import UserGuideGeneratorModule, has_compose_user_guide
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.client_factory import create_client_from_service
 from scripts.describe_pairs_jsonl import describe_pair_with_module
 from scripts.label_pairs_jsonl import (
@@ -28,10 +30,16 @@ from scripts.label_pairs_jsonl import (
 
 PairDescriber = Callable[[Path, Path], dict]
 PairLabeler = Callable[[Path, Path], dict]
+PairUserGuideGenerator = Callable[[Path, Path], dict]
 
 
 def _has_non_empty_field(payload: dict, field_name: str) -> bool:
     return payload.get(field_name) is not None
+
+
+def _last_call_id_from_callable(func: Callable[[Path, Path], dict]) -> str | None:
+    client = getattr(func, "api_client", None)
+    return getattr(client, "last_call_id", None)
 
 
 def describe_and_label_pairs_jsonl(
@@ -41,6 +49,7 @@ def describe_and_label_pairs_jsonl(
     input_root: str | Path | None = None,
     describe_func: PairDescriber,
     label_func: PairLabeler,
+    user_guide_func: PairUserGuideGenerator,
     limit: int | None = None,
     delay_seconds: float = 0.0,
     max_workers: int = DEFAULT_MAX_WORKERS,
@@ -64,8 +73,9 @@ def describe_and_label_pairs_jsonl(
 
             has_description = _has_non_empty_field(payload, "description")
             has_labels = _has_non_empty_field(payload, "labels")
-            if has_description and has_labels:
-                print(f"[{index}] [SKIP] description and labels exist: {out_json}")
+            has_user_guide = has_compose_user_guide(payload.get("user_guide"))
+            if has_description and has_labels and has_user_guide:
+                print(f"[{index}] [SKIP] description, labels, and user_guide exist: {out_json}")
                 stats["skipped"] += 1
                 continue
 
@@ -88,10 +98,16 @@ def describe_and_label_pairs_jsonl(
         out_json: Path,
         payload: dict,
     ) -> tuple[int, str, Path]:
+        call_ids = []
         if not _has_non_empty_field(payload, "description"):
             payload["description"] = describe_func(original_path, generated_path)
+            call_ids.append(_last_call_id_from_callable(describe_func))
         if not _has_non_empty_field(payload, "labels"):
             payload["labels"] = label_func(original_path, generated_path)
+            call_ids.append(_last_call_id_from_callable(label_func))
+        if not has_compose_user_guide(payload.get("user_guide")):
+            payload["user_guide"] = user_guide_func(original_path, generated_path)
+            call_ids.append(_last_call_id_from_callable(user_guide_func))
 
         payload.update(
             {
@@ -106,6 +122,12 @@ def describe_and_label_pairs_jsonl(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        for call_id in call_ids:
+            log_result_saved(
+                call_id=call_id,
+                result_path=str(out_json),
+                result_kind="json",
+            )
         return index, dst_image, out_json
 
     futures = {}
@@ -183,6 +205,11 @@ def main() -> None:
         default=DEFAULT_MODEL_ANALYSIS,
         help="Model for TwoImageLabelingModule.",
     )
+    parser.add_argument(
+        "--user_guide_model",
+        default=DEFAULT_MODEL_ANALYSIS,
+        help="Model for UserGuideGeneratorModule.",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Process at most N records.")
     parser.add_argument(
         "--max_workers",
@@ -209,6 +236,7 @@ def main() -> None:
             client=client,
             model=args.description_model,
         )
+    describe_func.api_client = client
 
     def label_func(original_path: Path, generated_path: Path) -> dict:
         return label_pair_with_module(
@@ -217,6 +245,17 @@ def main() -> None:
             client=client,
             model=args.label_model,
         )
+    label_func.api_client = client
+
+    def user_guide_func(original_path: Path, generated_path: Path) -> dict:
+        module = UserGuideGeneratorModule(model=args.user_guide_model)
+        return module._generate_user_guide(
+            client=client,
+            model=args.user_guide_model,
+            original_image_path=str(original_path),
+            generated_image_path=str(generated_path),
+        )
+    user_guide_func.api_client = client
 
     stats = describe_and_label_pairs_jsonl(
         jsonl_path=args.jsonl_path,
@@ -224,6 +263,7 @@ def main() -> None:
         input_root=args.input_root,
         describe_func=describe_func,
         label_func=label_func,
+        user_guide_func=user_guide_func,
         limit=args.limit,
         delay_seconds=args.delay_seconds,
         max_workers=args.max_workers,

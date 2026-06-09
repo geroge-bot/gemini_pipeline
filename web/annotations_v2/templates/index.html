@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据标注流程 V2</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="home">
+  <section id="loginView" class="loginView">
+    <form id="loginForm" class="loginCard">
+      <h1>数据标注流程 V2</h1>
+      <input id="loginUsernameInput" autocomplete="username" placeholder="用户名">
+      <button type="submit">进入</button>
+    </form>
+  </section>
+
+  <div id="appView" class="hidden">
+    <header class="topbar hidden">
+      <div>
+        <h1>数据标注流程 V2</h1>
+        <p id="sessionLine"></p>
+      </div>
+      <div class="topbarActions">
+        <button id="refreshBtn" class="ghost" type="button">刷新</button>
+        <button id="logoutBtn" class="ghost" type="button">退出</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="layout">
+        <form id="createTaskForm" class="panel taskForm">
+          <div class="sectionHead">
+            <h2>新建任务</h2>
+            <button type="submit">创建</button>
+          </div>
+          <input id="taskNameInput" placeholder="任务名称">
+          <input id="rootDirInput" placeholder="根目录">
+          <input id="jsonlPathInput" placeholder="JSONL 文件路径">
+          <input id="labelDirInput" placeholder="标签目录，可留空">
+          <div class="formGrid">
+            <label>粗筛阈值 <input id="roughMinMosInput" type="number" min="1" max="5" value="4"></label>
+            <label>精筛阈值 <input id="fineMinMosInput" type="number" min="1" max="5" value="4"></label>
+            <label>粗筛人数 <input id="roughAnnotatorCountInput" type="number" min="1" value="1"></label>
+            <label>精筛人数 <input id="fineAnnotatorCountInput" type="number" min="1" value="1"></label>
+          </div>
+          <label class="checkboxRow">
+            <input id="fineDefectInput" type="checkbox">
+            <span>精筛记录瑕疵</span>
+          </label>
+          <textarea id="issueOptionsInput" rows="3" placeholder="问题类型，用逗号或换行分隔"></textarea>
+          <textarea id="labelPathsInput" rows="3" placeholder="标签纠错路径，例如 输入图/菜品种类"></textarea>
+        </form>
+
+        <section class="panel">
+          <div class="sectionHead">
+            <h2>任务</h2>
+            <span id="taskCount" class="metaText">0 个</span>
+          </div>
+          <div id="taskList" class="taskList"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260609-sample-page"></script>
+</body>
+</html>

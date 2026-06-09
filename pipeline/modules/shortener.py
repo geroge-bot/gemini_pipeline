@@ -2,6 +2,7 @@ import os
 import json
 from pipeline.interfaces import PipelineModule, PipelineContext
 from pipeline.utils.api_client import GeminiAPIClient
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import image_to_base64
 from pipeline.utils.parsing import clean_xml_markdown
 
@@ -79,6 +80,11 @@ class ShortenModule(PipelineModule):
                 # 保存 JSON
                 target_dir = os.path.dirname(result.generated_image_path)
                 saved_json = result.save_json(target_dir)
+                log_result_saved(
+                    call_id=getattr(client, "last_call_id", None),
+                    result_path=saved_json,
+                    result_kind="json",
+                )
                 print(f"  -> Saved JSON pair: {os.path.basename(saved_json)}")
 
             except Exception as e:

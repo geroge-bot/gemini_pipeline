@@ -25,10 +25,36 @@ APP_DIR = Path(__file__).resolve().parent
 DEFAULT_STATE_PATH = APP_DIR / "data" / "state.json"
 PREVIEW_CACHE_DIR_ENV = "ANNOTATIONS_PREVIEW_CACHE_DIR"
 IMAGE_PREVIEW_MAX_EDGE = 1024
+DELETE_TASK_ADMIN_USERNAME = "孙本猿"
+ANNOTATION_BACKUP_INTERVAL_SECONDS = 2 * 60 * 60
+PAIR_LABEL_GROUP_NAME = "Pair"
+PAIR_LABEL_DIMENSIONS = ("问题标签", "优势标签")
+
+
+def default_pair_label_options() -> dict[str, Any]:
+    return {
+        "name": PAIR_LABEL_GROUP_NAME,
+        "dimensions": [
+            {"name": dimension, "options": []}
+            for dimension in PAIR_LABEL_DIMENSIONS
+        ],
+    }
 
 
 def utc_now() -> float:
     return time.time()
+
+
+def image_relative_path(root_dir: str | os.PathLike[str] | None, image_path: Any) -> str:
+    raw_value = str(image_path or "")
+    raw_path = Path(raw_value)
+    if not raw_path.is_absolute():
+        return raw_value
+
+    try:
+        return raw_path.relative_to(Path(root_dir or "")).as_posix()
+    except (ValueError, RuntimeError):
+        return raw_value
 
 
 def load_jsonl(path: str) -> list[dict[str, Any]]:
@@ -86,6 +112,16 @@ def normalize_annotation_tags(tags: dict[str, Any]) -> dict[str, Any]:
                     group_tags.pop(dimension_name, None)
                 else:
                     group_tags[dimension_name] = selected
+    pair_tags = normalized.get(PAIR_LABEL_GROUP_NAME)
+    if isinstance(pair_tags, dict):
+        for dimension_name in PAIR_LABEL_DIMENSIONS:
+            value = pair_tags.get(dimension_name)
+            if isinstance(value, list):
+                selected = next((item for item in value if item not in (None, "")), None)
+                if selected is None:
+                    pair_tags.pop(dimension_name, None)
+                else:
+                    pair_tags[dimension_name] = selected
     return normalized
 
 
@@ -286,6 +322,65 @@ def visible_label_options(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return visible_groups
 
 
+def normalize_pair_label_options(options: Any) -> dict[str, Any]:
+    normalized = default_pair_label_options()
+    if not isinstance(options, dict):
+        return normalized
+    dimensions = options.get("dimensions")
+    if not isinstance(dimensions, list):
+        return normalized
+    by_name = {
+        str(dimension.get("name")): dimension
+        for dimension in dimensions
+        if isinstance(dimension, dict)
+    }
+    for normalized_dimension in normalized["dimensions"]:
+        source = by_name.get(normalized_dimension["name"])
+        if not source:
+            continue
+        seen = set()
+        values = []
+        for option in source.get("options") or []:
+            if option in (None, ""):
+                continue
+            value = str(option).strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            values.append(value)
+        normalized_dimension["options"] = values
+    return normalized
+
+
+def merged_label_options(
+    label_options: list[dict[str, Any]],
+    pair_label_options: dict[str, Any],
+    annotations: dict[str, Any] | list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    merged = deepcopy(label_options or [])
+    pair_options = normalize_pair_label_options(pair_label_options)
+    if annotations:
+        annotation_values = annotations.values() if isinstance(annotations, dict) else annotations
+        for annotation in annotation_values:
+            if not isinstance(annotation, dict):
+                continue
+            pair_tags = nested_get(annotation.get("tags", {}), [PAIR_LABEL_GROUP_NAME])
+            if not isinstance(pair_tags, dict):
+                continue
+            for dimension in pair_options["dimensions"]:
+                value = pair_tags.get(dimension["name"])
+                raw_values = value if isinstance(value, list) else [value]
+                for raw_value in raw_values:
+                    if raw_value in (None, ""):
+                        continue
+                    option = str(raw_value).strip()
+                    if option and option not in dimension["options"]:
+                        dimension["options"].append(option)
+    merged = [group for group in merged if group.get("name") != PAIR_LABEL_GROUP_NAME]
+    merged.append(pair_options)
+    return merged
+
+
 def label_json_path(root_dir: Path, annotation_dir: Path, image_path: str) -> Path:
     raw_path = Path(str(image_path))
     image_full_path = raw_path if raw_path.is_absolute() else root_dir / raw_path
@@ -416,6 +511,14 @@ def build_subtasks(total_items: int, chunk_size: int) -> list[dict[str, Any]]:
     return subtasks
 
 
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def safe_download_name(name: str, suffix: str) -> str:
     safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in name.strip())
     return f"{safe or 'annotations'}_{suffix}"
@@ -525,8 +628,9 @@ class AnnotationStore:
         self._lock = threading.RLock()
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.state_path.exists():
-            self._write_state({"tasks": []})
+            self._write_state({"tasks": [], "pair_label_options": default_pair_label_options()})
         else:
+            self._migrate_pair_label_options()
             self._migrate_inline_tasks()
             self._migrate_task_files()
 
@@ -542,6 +646,14 @@ class AnnotationStore:
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(state, handle, ensure_ascii=False, indent=2)
         os.replace(tmp_path, self.state_path)
+
+    def _migrate_pair_label_options(self) -> None:
+        with self._lock:
+            state = self._read_state()
+            normalized = normalize_pair_label_options(state.get("pair_label_options"))
+            if state.get("pair_label_options") != normalized:
+                state["pair_label_options"] = normalized
+                self._write_state(state)
 
     def _migrate_inline_tasks(self) -> None:
         with self._lock:
@@ -617,6 +729,9 @@ class AnnotationStore:
 
     def _annotations_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "annotations.json"
+
+    def _issues_path(self, task: dict[str, Any]) -> Path:
+        return Path(task["data_dir"]) / "issues.json"
 
     def _annotation_items_dir(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "annotations"
@@ -695,6 +810,63 @@ class AnnotationStore:
             task["annotations"] = annotations
         self._write_annotation_files(task, annotations)
 
+    def _annotation_backup_root(self, task: dict[str, Any]) -> Path | None:
+        annotation_dir = str(task.get("annotation_dir") or "").strip()
+        if not annotation_dir:
+            return None
+        return Path(annotation_dir + "_bak")
+
+    def _backup_task_annotations(self, task: dict[str, Any], now: float) -> int:
+        backup_root = self._annotation_backup_root(task)
+        if backup_root is None:
+            return 0
+        annotations = self._read_annotations(task)
+        task_backup_dir = backup_root / str(task["id"])
+        for key, annotation in annotations.items():
+            self._write_json_file(task_backup_dir / "annotations" / f"{int(key)}.json", annotation)
+        self._write_json_file(
+            task_backup_dir / "manifest.json",
+            {
+                "task_id": task["id"],
+                "task_name": task["name"],
+                "source_annotation_dir": task.get("annotation_dir", ""),
+                "backup_root": str(backup_root),
+                "annotation_count": len(annotations),
+                "backed_up_at": now,
+            },
+        )
+        return len(annotations)
+
+    def backup_annotations(self) -> dict[str, Any]:
+        with self._lock:
+            state = self._read_state()
+            now = utc_now()
+            result = {"task_count": 0, "annotation_count": 0, "backup_roots": []}
+            for task in state.get("tasks", []):
+                backup_root = self._annotation_backup_root(task)
+                if backup_root is None:
+                    continue
+                annotation_count = self._backup_task_annotations(task, now)
+                result["task_count"] += 1
+                result["annotation_count"] += annotation_count
+                root_text = str(backup_root)
+                if root_text not in result["backup_roots"]:
+                    result["backup_roots"].append(root_text)
+            return result
+
+    def _read_issues(self, task: dict[str, Any]) -> list[dict[str, Any]]:
+        issues = self._read_json_file(self._issues_path(task), [])
+        return issues if isinstance(issues, list) else []
+
+    def _write_issues(self, task: dict[str, Any], issues: list[dict[str, Any]]) -> None:
+        self._write_json_file(self._issues_path(task), issues)
+
+    def _require_issue(self, issues: list[dict[str, Any]], issue_id: str) -> dict[str, Any]:
+        issue = next((item for item in issues if item.get("id") == issue_id), None)
+        if issue is None:
+            raise KeyError("issue not found")
+        return issue
+
     def _hydrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
         hydrated = deepcopy(task)
         hydrated["items"] = self._read_items(task)
@@ -706,6 +878,29 @@ class AnnotationStore:
             state = self._read_state()
             return [self._task_summary(task) for task in state["tasks"]]
 
+    def get_pair_label_options(self) -> dict[str, Any]:
+        with self._lock:
+            return normalize_pair_label_options(self._read_state().get("pair_label_options"))
+
+    def add_pair_label_option(self, dimension_name: str, label: str) -> dict[str, Any]:
+        dimension_name = str(dimension_name or "").strip()
+        label = str(label or "").strip()
+        if dimension_name not in PAIR_LABEL_DIMENSIONS:
+            raise ValueError("未知的 pair 标签类型")
+        if not label:
+            raise ValueError("标签不能为空")
+        with self._lock:
+            state = self._read_state()
+            options = normalize_pair_label_options(state.get("pair_label_options"))
+            for dimension in options["dimensions"]:
+                if dimension["name"] != dimension_name:
+                    continue
+                if label not in dimension["options"]:
+                    dimension["options"].append(label)
+            state["pair_label_options"] = options
+            self._write_state(state)
+            return deepcopy(options)
+
     def create_task(
         self,
         name: str,
@@ -713,6 +908,7 @@ class AnnotationStore:
         jsonl_path: str,
         chunk_size: int = 100,
         annotation_dir: str = "",
+        shuffle_items: bool = False,
         progress_callback: Any | None = None,
     ) -> dict[str, Any]:
         name = (name or "").strip() or Path(jsonl_path).stem
@@ -726,6 +922,13 @@ class AnnotationStore:
             progress_callback(15, f"loaded {len(items)} rows")
         load_item_labels(items, root_dir, annotation_dir, progress_callback=progress_callback)
         if progress_callback:
+            if shuffle_items:
+                progress_callback(80, "正在随机打乱数据")
+            else:
+                progress_callback(82, "building subtasks")
+        if shuffle_items:
+            random.shuffle(items)
+        if progress_callback and shuffle_items:
             progress_callback(82, "building subtasks")
         subtasks = build_subtasks(len(items), int(chunk_size or 100))
         task_id = str(uuid.uuid4())
@@ -738,6 +941,7 @@ class AnnotationStore:
             "jsonl_path": jsonl_path,
             "annotation_dir": annotation_dir,
             "chunk_size": int(chunk_size or 100),
+            "shuffle_items": bool(shuffle_items),
             "created_at": utc_now(),
             "item_count": len(items),
             "annotation_count": 0,
@@ -982,6 +1186,179 @@ class AnnotationStore:
             self._write_state(state)
             return annotation_with_qc_summary(annotation)
 
+    def create_issue(
+        self,
+        task_id: str,
+        item_index: int,
+        created_by: str,
+        title: str = "",
+        body: str = "",
+    ) -> dict[str, Any]:
+        created_by = (created_by or "").strip()
+        if not created_by:
+            raise ValueError("created_by is required")
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            root_dir = task.get("root_dir")
+            item_index = int(item_index)
+            item = self._read_item(task, item_index)
+            annotation = self._read_annotation(task, item_index)
+            if annotation is None:
+                raise ValueError("annotation is required before creating an issue")
+
+            now = utc_now()
+            issue = {
+                "id": str(uuid.uuid4()),
+                "status": "open",
+                "title": (title or "").strip() or "请检查该条标注结果",
+                "body": (body or "").strip(),
+                "item_index": item_index,
+                "created_by": created_by,
+                "assigned_to": str(annotation.get("username") or ""),
+                "created_at": now,
+                "updated_at": now,
+                "closed_at": None,
+                "closed_by": None,
+                "answers": [],
+                "snapshot": {
+                    "item_index": item_index,
+                    "src_image": item.get("src_image"),
+                    "dst_image": item.get("dst_image"),
+                    "src_relative_path": image_relative_path(root_dir, item.get("src_image")),
+                    "dst_relative_path": image_relative_path(root_dir, item.get("dst_image")),
+                    "original_tags": deepcopy(item.get("labels", {})),
+                    "mos": annotation.get("mos"),
+                    "tags": deepcopy(annotation.get("tags", {})),
+                    "username": annotation.get("username"),
+                    "updated_at": annotation.get("updated_at"),
+                },
+            }
+            issues = self._read_issues(task)
+            issues.append(issue)
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def list_issues(self, task_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            issues = sorted(self._read_issues(task), key=lambda issue: issue.get("created_at", 0), reverse=True)
+            root_dir = task.get("root_dir")
+            for issue in issues:
+                snapshot = issue.get("snapshot")
+                if not isinstance(snapshot, dict):
+                    continue
+                snapshot.setdefault("src_relative_path", image_relative_path(root_dir, snapshot.get("src_image")))
+                snapshot.setdefault("dst_relative_path", image_relative_path(root_dir, snapshot.get("dst_image")))
+            return issues
+
+    def add_issue_answer(self, task_id: str, issue_id: str, author: str, body: str) -> dict[str, Any]:
+        author = (author or "").strip()
+        body = (body or "").strip()
+        if not author:
+            raise ValueError("author is required")
+        if not body:
+            raise ValueError("answer body is required")
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            now = utc_now()
+            issue.setdefault("answers", []).append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "author": author,
+                    "body": body,
+                    "created_at": now,
+                }
+            )
+            issue["updated_at"] = now
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def close_issue(self, task_id: str, issue_id: str, username: str) -> dict[str, Any]:
+        username = (username or "").strip()
+        if not username:
+            raise ValueError("username is required")
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            now = utc_now()
+            issue["status"] = "closed"
+            issue["closed_at"] = now
+            issue["closed_by"] = username
+            issue["updated_at"] = now
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def reopen_issue(self, task_id: str, issue_id: str, username: str) -> dict[str, Any]:
+        username = (username or "").strip()
+        if not username:
+            raise ValueError("username is required")
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            issue["status"] = "open"
+            issue["closed_at"] = None
+            issue["closed_by"] = None
+            issue["updated_at"] = utc_now()
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def export_issues_markdown(self, task_id: str) -> str:
+        with self._lock:
+            task = self._require_task(self._read_state(), task_id)
+            issues = sorted(self._read_issues(task), key=lambda issue: issue.get("created_at", 0))
+            lines = [f"# Issues for {task['name']}", ""]
+            if not issues:
+                lines.extend(["No issues.", ""])
+                return "\n".join(lines)
+            for issue in issues:
+                snapshot = issue.get("snapshot", {})
+                lines.extend(
+                    [
+                        f"## {issue.get('title') or 'Untitled issue'}",
+                        "",
+                        f"- ID: {issue.get('id')}",
+                        f"- Status: {issue.get('status')}",
+                        f"- Item Index: {issue.get('item_index')}",
+                        f"- Created By: {issue.get('created_by')}",
+                        f"- Assignee: {issue.get('assigned_to')}",
+                        f"- Closed By: {issue.get('closed_by') or ''}",
+                        f"- Source Image: {snapshot.get('src_image') or ''}",
+                        f"- Destination Image: {snapshot.get('dst_image') or ''}",
+                        f"- MOS: {snapshot.get('mos')}",
+                        f"- Annotator: {snapshot.get('username') or ''}",
+                        "",
+                        "### Question",
+                        "",
+                        issue.get("body") or "",
+                        "",
+                        "### Tags",
+                        "",
+                        "```json",
+                        json.dumps(snapshot.get("tags", {}), ensure_ascii=False, indent=2),
+                        "```",
+                        "",
+                        "### Answers",
+                        "",
+                    ]
+                )
+                answers = issue.get("answers") or []
+                if not answers:
+                    lines.extend(["No answers.", ""])
+                for answer in answers:
+                    lines.extend(
+                        [
+                            f"#### {answer.get('author') or 'unknown'}",
+                            "",
+                            answer.get("body") or "",
+                            "",
+                        ]
+                    )
+            return "\n".join(lines)
+
     def undo_quality_check(self, task_id: str, item_index: int, username: str) -> dict[str, Any]:
         username = (username or "").strip()
         if not username:
@@ -1037,6 +1414,7 @@ class AnnotationStore:
     ) -> list[dict[str, Any]]:
         with self._lock:
             task = self._require_task(self._read_state(), task_id)
+            root_dir = task.get("root_dir")
             annotations = self._read_annotations(task)
             results = []
             for key, annotation in sorted(annotations.items(), key=lambda pair: int(pair[0])):
@@ -1051,6 +1429,8 @@ class AnnotationStore:
                         "item_index": item_index,
                         "src_image": item["src_image"],
                         "dst_image": item["dst_image"],
+                        "src_relative_path": image_relative_path(root_dir, item["src_image"]),
+                        "dst_relative_path": image_relative_path(root_dir, item["dst_image"]),
                         "original_tags": item.get("labels", {}),
                         "tags": annotation.get("tags", {}),
                         "mos": annotation.get("mos"),
@@ -1071,6 +1451,7 @@ class AnnotationStore:
         with self._lock:
             task = self._require_task(self._read_state(), task_id)
             root_path = Path(task.get("root_dir") or "")
+            root_dir = task.get("root_dir")
             annotation_path = Path(task.get("annotation_dir") or "")
             annotations = self._read_annotations(task)
             results = []
@@ -1086,6 +1467,8 @@ class AnnotationStore:
                         "item_index": item_index,
                         "src_image": item["src_image"],
                         "dst_image": item["dst_image"],
+                        "src_relative_path": image_relative_path(root_dir, item["src_image"]),
+                        "dst_relative_path": image_relative_path(root_dir, item["dst_image"]),
                         "original_tags": item_labels,
                         "tags": annotation.get("tags", item_labels),
                         "mos": annotation.get("mos"),
@@ -1106,6 +1489,11 @@ class AnnotationStore:
         with self._lock:
             task = self._require_task(self._read_state(), task_id)
             annotations = self._read_annotations(task)
+            label_options = merged_label_options(
+                task.get("label_options") or visible_label_options(self._read_items(task)),
+                self.get_pair_label_options(),
+                annotations,
+            )
             return {
                 "mos": sorted(
                     {int(annotation.get("mos")) for annotation in annotations.values() if annotation.get("mos") is not None}
@@ -1117,7 +1505,7 @@ class AnnotationStore:
                         if annotation.get("username")
                     }
                 ),
-                "label_options": deepcopy(task.get("label_options") or visible_label_options(self._read_items(task))),
+                "label_options": label_options,
             }
 
     def get_statistics(
@@ -1133,7 +1521,11 @@ class AnnotationStore:
                 for _, annotation in sorted(self._read_annotations(task).items(), key=lambda pair: int(pair[0]))
                 if result_matches_filters(annotation, filters)
             ]
-            label_options = deepcopy(task.get("label_options") or visible_label_options(self._read_items(task)))
+            label_options = merged_label_options(
+                task.get("label_options") or visible_label_options(self._read_items(task)),
+                self.get_pair_label_options(),
+                annotations,
+            )
             label_paths: list[list[str]] = []
             for group in label_options:
                 for dimension in group.get("dimensions", []):
@@ -1239,6 +1631,7 @@ class AnnotationStore:
     def get_annotated_results(self, task_id: str) -> tuple[str, list[dict[str, Any]]]:
         with self._lock:
             task = self._require_task(self._read_state(), task_id)
+            root_dir = task.get("root_dir")
             annotations = self._read_annotations(task)
             results = []
             for key, annotation in sorted(annotations.items(), key=lambda pair: int(pair[0])):
@@ -1249,6 +1642,8 @@ class AnnotationStore:
                         "item_index": item_index,
                         "src_image": item["src_image"],
                         "dst_image": item["dst_image"],
+                        "src_relative_path": image_relative_path(root_dir, item["src_image"]),
+                        "dst_relative_path": image_relative_path(root_dir, item["dst_image"]),
                         "original_tags": item.get("labels", {}),
                         "tags": annotation.get("tags", {}),
                         "mos": annotation.get("mos"),
@@ -1324,6 +1719,7 @@ class AnnotationStore:
             "jsonl_path": task["jsonl_path"],
             "annotation_dir": task.get("annotation_dir", ""),
             "chunk_size": task["chunk_size"],
+            "shuffle_items": bool(task.get("shuffle_items", False)),
             "created_at": task["created_at"],
             "item_count": task.get("item_count", len(task.get("items", []))),
             "subtask_count": len(task["subtasks"]),
@@ -1351,7 +1747,11 @@ class AnnotationStore:
             )
         payload = deepcopy(subtask)
         payload["items"] = items
-        payload["label_options"] = deepcopy(task.get("label_options") or visible_label_options(self._read_items(task)))
+        payload["label_options"] = merged_label_options(
+            task.get("label_options") or visible_label_options(self._read_items(task)),
+            self.get_pair_label_options(),
+        )
+        payload["pair_label_options"] = self.get_pair_label_options()
         return payload
 
     def _active_subtask_for_user(self, task: dict[str, Any], username: str) -> dict[str, Any] | None:
@@ -1423,6 +1823,7 @@ class CreateTaskJobs:
                 payload.get("jsonl_path", ""),
                 int(payload.get("chunk_size") or 100),
                 payload.get("annotation_dir", ""),
+                truthy(payload.get("shuffle_items", False)),
                 progress_callback=progress,
             )
             self._update(
@@ -1487,9 +1888,36 @@ class PreviewCacheJobs:
             self._update(job_id, status="failed", error=str(exc), message=str(exc))
 
 
+class AnnotationBackupScheduler:
+    def __init__(self, store: AnnotationStore, interval_seconds: int = ANNOTATION_BACKUP_INTERVAL_SECONDS):
+        self.store = store
+        self.interval_seconds = interval_seconds
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=1)
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self.interval_seconds):
+            try:
+                self.store.backup_annotations()
+            except Exception:
+                app.logger.exception("annotation backup failed")
+
+
 store = AnnotationStore()
 create_jobs = CreateTaskJobs(store)
 preview_cache_jobs = PreviewCacheJobs(store)
+backup_scheduler = AnnotationBackupScheduler(store)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.json.ensure_ascii = False
 
@@ -1528,6 +1956,7 @@ def api_create_task():
         data.get("jsonl_path", ""),
         int(data.get("chunk_size") or 100),
         data.get("annotation_dir", ""),
+        truthy(data.get("shuffle_items", False)),
     )
     return jsonify({"task": store._task_summary(task)}), 201
 
@@ -1567,6 +1996,9 @@ def api_get_preview_cache_job(task_id: str, job_id: str):
 
 @app.delete("/api/tasks/<task_id>")
 def api_delete_task(task_id: str):
+    data = request.get_json(silent=True) or {}
+    if str(data.get("username") or "").strip() != DELETE_TASK_ADMIN_USERNAME:
+        return jsonify({"error": "只有孙本猿可以删除任务"}), 403
     if not store.delete_task(task_id):
         return jsonify({"error": "task not found"}), 404
     return jsonify({"deleted": True})
@@ -1575,6 +2007,18 @@ def api_delete_task(task_id: str):
 @app.post("/api/tasks/<task_id>/labels/refresh")
 def api_refresh_task_labels(task_id: str):
     return jsonify({"result": store.refresh_task_labels(task_id)})
+
+
+@app.get("/api/pair-label-options")
+def api_get_pair_label_options():
+    return jsonify({"pair_label_options": store.get_pair_label_options()})
+
+
+@app.post("/api/pair-label-options")
+def api_add_pair_label_option():
+    data = request.get_json(force=True) or {}
+    options = store.add_pair_label_option(data.get("dimension", ""), data.get("label", ""))
+    return jsonify({"pair_label_options": options})
 
 
 @app.post("/api/tasks/<task_id>/assign")
@@ -1662,6 +2106,61 @@ def api_undo_quality_check(task_id: str, item_index: int):
     return jsonify({"annotation": annotation})
 
 
+@app.get("/api/tasks/<task_id>/issues")
+def api_list_issues(task_id: str):
+    return jsonify({"issues": store.list_issues(task_id)})
+
+
+@app.post("/api/tasks/<task_id>/issues")
+def api_create_issue(task_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.create_issue(
+        task_id,
+        int(data.get("item_index")),
+        data.get("created_by", ""),
+        data.get("title", ""),
+        data.get("body", ""),
+    )
+    return jsonify({"issue": issue}), 201
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/answers")
+def api_add_issue_answer(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.add_issue_answer(task_id, issue_id, data.get("author", ""), data.get("body", ""))
+    return jsonify({"issue": issue})
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/close")
+def api_close_issue(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.close_issue(task_id, issue_id, data.get("username", ""))
+    return jsonify({"issue": issue})
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/reopen")
+def api_reopen_issue(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.reopen_issue(task_id, issue_id, data.get("username", ""))
+    return jsonify({"issue": issue})
+
+
+@app.get("/api/tasks/<task_id>/issues/export.md")
+def api_export_issues_markdown(task_id: str):
+    task = store.get_task(task_id)
+    if task is None:
+        return jsonify({"error": "task not found"}), 404
+    content = store.export_issues_markdown(task_id)
+    output = BytesIO(content.encode("utf-8"))
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype="text/markdown; charset=utf-8",
+        as_attachment=True,
+        download_name=safe_download_name(task["name"], "issues.md"),
+    )
+
+
 @app.get("/api/tasks/<task_id>/statistics")
 def api_statistics(task_id: str):
     filters = None
@@ -1734,4 +2233,5 @@ def api_image(task_id: str, item_index: int, kind: str):
 
 
 if __name__ == "__main__":
+    backup_scheduler.start()
     app.run(host="127.0.0.1", port=int(os.environ.get("ANNOTATIONS_PORT", "5055")), debug=False, threaded=True)

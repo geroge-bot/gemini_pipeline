@@ -6,6 +6,7 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 from pipeline.interfaces import PipelineModule, PipelineContext
 from pipeline.utils.api_client import GeminiAPIClient
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import image_to_base64
 
 class ValidatorModule(PipelineModule):
@@ -79,7 +80,12 @@ class ValidatorModule(PipelineModule):
                 }
                 
                 result.validation = val_data
-                result.save_json(os.path.dirname(result.generated_image_path))
+                saved_json = result.save_json(os.path.dirname(result.generated_image_path))
+                log_result_saved(
+                    call_id=getattr(client, "last_call_id", None),
+                    result_path=saved_json,
+                    result_kind="json",
+                )
                 
                 image_key = os.path.basename(result.generated_image_path)
                 

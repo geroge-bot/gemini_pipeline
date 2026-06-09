@@ -5,8 +5,8 @@ from pathlib import Path
 from scripts.move_filtered import parse_generated_image_name
 
 
-DEFAULT_INPUT_DIR = r"D:\美食数据\美食数据-xhs-退化"
-IMAGE_ROOT_NAMES = [r"退化-v3", r"原图-去水印"]
+DEFAULT_INPUT_DIR = "/Users/george/data/260520/output"
+IMAGE_ROOT_NAMES = ["ori_image", "output_gen"]
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 

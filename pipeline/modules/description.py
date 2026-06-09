@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from pipeline.interfaces import PipelineModule, PipelineContext
 from pipeline.utils.api_client import GeminiAPIClient
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import image_to_base64
 
 
@@ -260,6 +261,11 @@ class DescriptionModule(PipelineModule):
                 # 保存 JSON（与生成图片同目录）
                 target_dir = os.path.dirname(result.generated_image_path)
                 saved_json = result.save_json(target_dir)
+                log_result_saved(
+                    call_id=getattr(client, "last_call_id", None),
+                    result_path=saved_json,
+                    result_kind="json",
+                )
                 print(f"  -> Description done for {result.theme}, saved: {os.path.basename(saved_json)}")
 
             except Exception as e:

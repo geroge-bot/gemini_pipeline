@@ -156,3 +156,34 @@ class ServiceManager:
     def list_service_names() -> list:
         """Returns a list of all registered service names."""
         return list(ServiceManager.get_all_services().keys())
+
+    @staticmethod
+    def find_matching_service_name(
+        service_type: str,
+        api_key: str,
+        base_url: str,
+        model: str = "",
+    ) -> Optional[str]:
+        """
+        Find a configured service by API type, key, base URL, and optional model.
+
+        Text/image services can share the same key and base URL, so model is used as
+        the tie-breaker when available.
+        """
+        services = ServiceManager.get_all_services()
+        matches = [
+            svc
+            for svc in services.values()
+            if svc.type == service_type
+            and svc.api_key == api_key
+            and svc.base_url.rstrip("/") == base_url.rstrip("/")
+        ]
+        if not matches:
+            return None
+
+        if model:
+            for svc in matches:
+                if svc.model == model:
+                    return svc.name
+
+        return matches[0].name

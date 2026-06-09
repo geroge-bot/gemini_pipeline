@@ -1,0 +1,35 @@
+{
+  "tasks": [
+    {
+      "id": "aad84e7c-2359-4825-b28f-fcfa832139d7",
+      "name": "20260520 v2",
+      "root_dir": "/Users/george/data/20260520/output",
+      "jsonl_path": "/Users/george/data/20260520/output/260520_pairs.jsonl",
+      "label_dir": "/Users/george/data/20260520/output/annotations",
+      "data_dir": "/Users/george/workspace/gemini_pipeline/web/annotations_v2/data/tasks/aad84e7c-2359-4825-b28f-fcfa832139d7",
+      "created_at": 1780805266.60416,
+      "item_count": 5568,
+      "rough": {
+        "min_mos": 4,
+        "require_no_defect": true,
+        "primary_issue": "",
+        "issue_options": [
+          "主体问题",
+          "构图问题",
+          "文字问题",
+          "画质问题"
+        ]
+      },
+      "fine": {
+        "min_mos": 4,
+        "enable_defect": true
+      },
+      "selected_label_paths": [
+        [
+          "输入图",
+          "菜品种类"
+        ]
+      ]
+    }
+  ]
+}

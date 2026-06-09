@@ -39,6 +39,10 @@
           <input id="annotationDirInput" placeholder="标注目录，例如 D:\202604-美食数据-历史数据整理\标注结果">
           <input id="jsonlPathInput" placeholder="jsonl 文件，例如 D:\202604-美食数据-历史数据整理\整理后\data.jsonl">
           <input id="chunkSizeInput" type="number" min="1" value="100" placeholder="子任务大小">
+          <label class="checkboxRow">
+            <input id="shuffleItemsInput" type="checkbox">
+            <span>随机打乱后切分</span>
+          </label>
           <button type="submit">创建任务</button>
           <div id="createProgress" class="progressBox hidden">
             <div class="progressMeta">
@@ -106,15 +110,20 @@
           <button id="resultsJumpBtn" class="ghost">跳转</button>
           <button id="resultsNextBtn">下一页</button>
         </div>
-        <button id="openResultsFilterBtn" class="ghost">筛选</button>
+        <div class="resultActions">
+          <button id="createIssueBtn">提出 Issue</button>
+          <button id="openResultsFilterBtn" class="ghost">筛选</button>
+        </div>
       </div>
       <div class="reviewGrid">
         <figure>
           <figcaption>原图</figcaption>
+          <div id="resultSrcPath" class="imagePath"></div>
           <img id="resultSrcImage" alt="原图" loading="lazy">
         </figure>
         <figure>
           <figcaption>生成图</figcaption>
+          <div id="resultDstPath" class="imagePath"></div>
           <img id="resultDstImage" alt="生成图" loading="lazy">
         </figure>
         <aside class="tagEditor">
@@ -124,6 +133,23 @@
         </aside>
       </div>
       <div id="resultsPagerSlot" class="bottomPager"></div>
+    </section>
+
+    <section id="issuesView" class="hidden">
+      <div class="workHeader">
+        <button id="backFromIssuesBtn" class="ghost">返回任务</button>
+        <div>
+          <strong id="issuesTitle"></strong>
+          <span id="issuesSummary"></span>
+        </div>
+        <div class="issueHeaderActions">
+          <button id="exportIssuesBtn" class="ghost">导出 Markdown</button>
+        </div>
+      </div>
+      <div class="issuesLayout">
+        <aside class="issuesList" id="issuesList"></aside>
+        <section class="issueDetail" id="issueDetail"></section>
+      </div>
     </section>
 
     <section id="visualizationView" class="hidden">
@@ -143,10 +169,12 @@
       <div class="visualizationGrid">
         <figure>
           <figcaption>原图</figcaption>
+          <div id="visualizationSrcPath" class="imagePath"></div>
           <img id="visualizationSrcImage" alt="原图" loading="lazy">
         </figure>
         <figure>
           <figcaption>目标图</figcaption>
+          <div id="visualizationDstPath" class="imagePath"></div>
           <img id="visualizationDstImage" alt="目标图" loading="lazy">
         </figure>
         <aside class="promptPanel">
@@ -170,6 +198,10 @@
           <span id="statsSummary"></span>
         </div>
         <div class="statsActions">
+          <div class="statsChartToggle" role="group" aria-label="统计图表类型">
+            <button id="statsBarChartBtn" class="active" type="button" data-stats-chart="bar">柱状图</button>
+            <button id="statsPieChartBtn" type="button" data-stats-chart="pie">饼状图</button>
+          </div>
           <button id="openStatsFilterBtn" class="ghost">筛选</button>
           <button id="applyStatsCombinationBtn">组合统计</button>
         </div>
@@ -200,6 +232,21 @@
       <button id="applyResultsFilterBtn">筛选</button>
     </div>
   </aside>
+
+  <div id="issueModal" class="modalOverlay hidden" aria-hidden="true">
+    <form id="issueForm" class="issueModalCard">
+      <div class="modalHeader">
+        <h2>提出 Issue</h2>
+        <button id="cancelIssueBtn" class="ghost" type="button">取消</button>
+      </div>
+      <input id="issueTitleInput" placeholder="Issue 标题">
+      <textarea id="issueBodyInput" rows="5" placeholder="描述你发现的问题"></textarea>
+      <div class="drawerActions">
+        <span id="issueAssigneeHint" class="taskMeta"></span>
+        <button type="submit">提交 Issue</button>
+      </div>
+    </form>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
   <script src="{{ url_for('static', filename='app.js') }}"></script>

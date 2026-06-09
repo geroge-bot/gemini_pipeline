@@ -19,7 +19,13 @@ const state = {
   statistics: null,
   statsFilters: { mos: [], annotators: [], labels: {} },
   statsCombinations: [],
+  statsChartType: ["bar", "pie"].includes(localStorage.getItem("annotations.statsChartType")) ? localStorage.getItem("annotations.statsChartType") : "bar",
   activeFilterTarget: "results",
+  issues: [],
+  activeIssueId: null,
+  issueReturnItemIndex: null,
+  issueSelection: null,
+  pairLabelOptions: { name: "Pair", dimensions: [{ name: "问题标签", options: [] }, { name: "优势标签", options: [] }] },
 };
 
 const preloadedImages = new Map();
@@ -28,7 +34,7 @@ const MAX_PRELOADED_IMAGES = 80;
 const $ = (id) => document.getElementById(id);
 
 function show(viewId) {
-  ["loginView", "homeView", "annotateView", "resultsView", "visualizationView", "statsView"].forEach((id) => {
+  ["loginView", "homeView", "annotateView", "resultsView", "issuesView", "visualizationView", "statsView"].forEach((id) => {
     $(id).classList.toggle("hidden", id !== viewId);
   });
   document.body.dataset.view = viewId;
@@ -142,13 +148,14 @@ function renderTasks() {
       <div class="taskActions">
         <button data-action="annotate" data-id="${task.id}" data-name="${escapeAttr(task.name)}">进入标注</button>
         <button class="ghost" data-action="results" data-id="${task.id}" data-name="${escapeAttr(task.name)}">结果展示</button>
+        <button class="ghost" data-action="issues" data-id="${task.id}" data-name="${escapeAttr(task.name)}">Issues</button>
         <button class="ghost" data-action="stats" data-id="${task.id}" data-name="${escapeAttr(task.name)}">结果统计</button>
         <button class="ghost" data-action="download-jsonl" data-id="${task.id}">下载 JSONL</button>
         <button class="ghost" data-action="download-xlsx" data-id="${task.id}">下载 Excel</button>
-        <button class="dangerBtn" data-action="delete" data-id="${task.id}" data-name="${escapeAttr(task.name)}">删除任务</button>
         <button class="ghost" data-action="refresh-labels" data-id="${task.id}">更新AI标签</button>
         <button class="ghost" data-action="visualization" data-id="${task.id}" data-name="${escapeAttr(task.name)}">全部数据可视化</button>
         <button class="ghost" data-action="cache-inputs" data-id="${task.id}">缓存输入图</button>
+        ${state.username === "孙本猿" ? `<button class="dangerBtn" data-action="delete" data-id="${task.id}" data-name="${escapeAttr(task.name)}">删除任务</button>` : ""}
       </div>
     `;
     list.appendChild(card);
@@ -159,7 +166,7 @@ async function deleteTask(taskId, taskName) {
   if (!window.confirm(`确认删除任务“${taskName}”？该操作会删除任务分配和标注结果。`)) {
     return;
   }
-  await api(`/api/tasks/${taskId}`, { method: "DELETE" });
+  await api(`/api/tasks/${taskId}`, { method: "DELETE", body: JSON.stringify({ username: state.username }) });
   toast("任务已删除");
   await loadTasks();
 }
@@ -217,6 +224,7 @@ async function createTask(event) {
     annotation_dir: $("annotationDirInput").value.trim(),
     jsonl_path: $("jsonlPathInput").value.trim(),
     chunk_size: Number($("chunkSizeInput").value || 100),
+    shuffle_items: $("shuffleItemsInput").checked,
   };
   try {
     submitButton.disabled = true;
@@ -264,6 +272,7 @@ async function startAnnotation(taskId, taskName) {
   state.taskId = taskId;
   state.taskName = taskName;
   state.subtask = data.subtask;
+  state.pairLabelOptions = data.subtask.pair_label_options || state.pairLabelOptions;
   const firstUnfinished = data.subtask.items.findIndex((item) => !item.annotation);
   state.page = firstUnfinished >= 0 ? firstUnfinished : 0;
   show("annotateView");
@@ -324,10 +333,10 @@ function renderTagEditor() {
   const list = $("tagList");
   list.innerHTML = "";
   if (!groups.length) {
-    list.innerHTML = '<div class="taskMeta">当前任务没有可展示的标签维度</div>';
-    return;
+    list.innerHTML = '<div class="taskMeta">当前任务没有可展示的图像标签维度</div>';
   }
   for (const group of groups) {
+    if (group.name === state.pairLabelOptions.name) continue;
     const groupNode = document.createElement("section");
     groupNode.className = "labelGroup";
     groupNode.innerHTML = `<h4>${escapeHtml(group.name)}</h4>`;
@@ -372,6 +381,72 @@ function renderTagEditor() {
     }
     list.appendChild(groupNode);
   }
+  list.appendChild(renderPairLabelGroup());
+}
+
+function renderPairLabelGroup() {
+  const groupNode = document.createElement("section");
+  groupNode.className = "labelGroup pairLabelGroup";
+  groupNode.innerHTML = `<h4>${escapeHtml(state.pairLabelOptions.name)}</h4>`;
+  for (const dimension of state.pairLabelOptions.dimensions || []) {
+    const path = [state.pairLabelOptions.name, dimension.name];
+    const currentValue = getNested(state.currentTags, path);
+    const options = optionsWithCurrentValue(dimension.options || [], currentValue);
+    const dimensionNode = document.createElement("div");
+    dimensionNode.className = "labelDimension pairLabelDimension";
+    dimensionNode.setAttribute("role", "group");
+    dimensionNode.setAttribute("aria-label", dimension.name);
+    dimensionNode.innerHTML = `<div class="labelDimensionName">${escapeHtml(dimension.name)}</div>`;
+
+    const controls = document.createElement("div");
+    controls.className = "pairLabelControls";
+    const optionsNode = document.createElement("div");
+    optionsNode.className = "labelOptions";
+    if (!options.length) {
+      optionsNode.innerHTML = '<div class="taskMeta pairEmptyOptions">暂无可选项</div>';
+    }
+    for (const option of options) {
+      const id = `pair-label-${hashText(`${path.join(".")}.${String(option)}`)}`;
+      const label = document.createElement("label");
+      label.className = "labelOption";
+      label.setAttribute("for", id);
+      label.innerHTML = `
+        <input id="${id}" class="labelOptionInput" type="radio" name="${escapeAttr(path.join("."))}" data-label-path="${escapeAttr(JSON.stringify(path))}" data-label-value="${escapeAttr(JSON.stringify(option))}"${isSelectedValue(option, currentValue) ? " checked" : ""}>
+        <span>${escapeHtml(String(option))}</span>
+      `;
+      optionsNode.appendChild(label);
+    }
+    controls.appendChild(optionsNode);
+    controls.insertAdjacentHTML("beforeend", `
+      <div class="pairAddRow">
+        <input class="pairAddInput" data-pair-dimension="${escapeAttr(dimension.name)}" placeholder="新增${escapeAttr(dimension.name)}">
+        <button class="ghost pairAddBtn" type="button" data-pair-dimension="${escapeAttr(dimension.name)}">添加</button>
+      </div>
+    `);
+    dimensionNode.appendChild(controls);
+    groupNode.appendChild(dimensionNode);
+  }
+  return groupNode;
+}
+
+async function addPairLabelOption(dimensionName, label) {
+  const trimmed = String(label || "").trim();
+  if (!trimmed) {
+    toast("请输入标签名称");
+    return;
+  }
+  state.currentTags = collectTags();
+  if (!window.confirm(`确认添加“${trimmed}”到${dimensionName}？添加后所有任务都可以使用。`)) {
+    return;
+  }
+  const data = await api("/api/pair-label-options", {
+    method: "POST",
+    body: JSON.stringify({ dimension: dimensionName, label: trimmed }),
+  });
+  state.pairLabelOptions = data.pair_label_options || state.pairLabelOptions;
+  setNested(state.currentTags, [state.pairLabelOptions.name, dimensionName], trimmed);
+  renderTagEditor();
+  toast("标签已添加");
 }
 
 function collectTags() {
@@ -472,6 +547,7 @@ async function reloadResults() {
   const data = await api(`/api/tasks/${state.taskId}/results?${params.toString()}`);
   state.results = data.results;
   state.resultFilterOptions = data.filter_options || { mos: [], annotators: [], label_options: [] };
+  updatePairLabelOptionsFromFilterOptions(state.resultFilterOptions);
   if (state.resultPage >= state.results.length) {
     state.resultPage = Math.max(0, state.results.length - 1);
   }
@@ -526,7 +602,279 @@ async function reloadStatistics() {
   state.statistics = data.statistics;
   if (state.statistics?.filter_options) {
     state.resultFilterOptions = state.statistics.filter_options;
+    updatePairLabelOptionsFromFilterOptions(state.resultFilterOptions);
   }
+}
+
+async function openIssues(taskId, taskName) {
+  state.taskId = taskId;
+  state.taskName = taskName;
+  await reloadIssues();
+  show("issuesView");
+  renderIssuesPage();
+}
+
+async function reloadIssues() {
+  const data = await api(`/api/tasks/${state.taskId}/issues`);
+  state.issues = data.issues || [];
+  if (!state.issues.some((issue) => issue.id === state.activeIssueId)) {
+    state.activeIssueId = state.issues[0]?.id || null;
+  }
+}
+
+function renderIssuesPage() {
+  $("issuesTitle").textContent = `${state.taskName} / Issues`;
+  const openCount = state.issues.filter((issue) => issue.status === "open").length;
+  $("issuesSummary").textContent = `${openCount} open / ${state.issues.length} total`;
+  renderIssuesList();
+  renderIssueDetail();
+}
+
+function renderIssuesList() {
+  const list = $("issuesList");
+  if (!state.issues.length) {
+    list.innerHTML = '<div class="taskMeta">暂无 issue</div>';
+    return;
+  }
+  list.innerHTML = state.issues.map((issue) => `
+    <button class="issueListItem${issue.id === state.activeIssueId ? " active" : ""}" type="button" data-issue-id="${escapeAttr(issue.id)}">
+      <span class="issueStatus ${escapeAttr(issue.status)}">${escapeHtml(issue.status)}</span>
+      <strong>${escapeHtml(issue.title || "Untitled issue")}</strong>
+      <span>提出人 ${escapeHtml(issue.created_by || "")} · 解决人 ${escapeHtml(issue.assigned_to || "")}</span>
+      <span>样本 #${issue.item_index} · ${issue.answers?.length || 0} answers</span>
+    </button>
+  `).join("");
+}
+
+function renderIssueDetail() {
+  const detail = $("issueDetail");
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) {
+    detail.innerHTML = '<div class="taskMeta">请选择一个 issue</div>';
+    return;
+  }
+  const snapshot = issue.snapshot || {};
+  detail.innerHTML = `
+    <div class="issueDetailHeader">
+      <div>
+        <h2>${escapeHtml(issue.title || "Untitled issue")}</h2>
+        <div class="taskMeta">提出人 ${escapeHtml(issue.created_by || "")} · 解决人 ${escapeHtml(issue.assigned_to || "")} · 样本 #${issue.item_index}</div>
+      </div>
+      <div class="issueHeaderActions">
+        <button class="ghost" type="button" data-issue-action="open-result">查看结果页</button>
+        <button class="${issue.status === "open" ? "dangerBtn" : "ghost"}" type="button" data-issue-action="${issue.status === "open" ? "close" : "reopen"}">${issue.status === "open" ? "关闭" : "重开"}</button>
+      </div>
+    </div>
+    <section class="issueQuestion">
+      <h3>问题</h3>
+      <p>${escapeHtml(issue.body || "请检查该条标注结果")}</p>
+    </section>
+    <div class="issueResultGrid">
+      ${renderIssueImage("src", "原图", issue.item_index, snapshot.src_relative_path || snapshot.src_image)}
+      ${renderIssueImage("dst", "生成图", issue.item_index, snapshot.dst_relative_path || snapshot.dst_image)}
+      <aside class="issueSnapshot">
+        <span class="resultBadge">MOS ${escapeHtml(snapshot.mos == null ? "未打分" : String(snapshot.mos))}</span>
+        <span class="resultBadge">Annotator ${escapeHtml(snapshot.username || "")}</span>
+        <div id="issueSnapshotTags"></div>
+      </aside>
+    </div>
+    <section class="issueAnswers">
+      <h3>回答</h3>
+      <div class="issueAnswerList">
+        ${(issue.answers || []).map((answer) => `
+          <article class="issueAnswer">
+            <strong>${escapeHtml(answer.author || "")}</strong>
+            <p>${escapeHtml(answer.body || "")}</p>
+          </article>
+        `).join("") || '<div class="taskMeta">暂无回答</div>'}
+      </div>
+      <textarea id="issueAnswerInput" rows="5" placeholder="输入回答，或框选图片区域插入 bbox 引用"></textarea>
+      <div class="issueAnswerActions">
+        <button class="ghost" type="button" data-issue-action="select-src">框选原图</button>
+        <button class="ghost" type="button" data-issue-action="select-dst">框选生成图</button>
+        <button type="button" data-issue-action="answer">提交回答</button>
+      </div>
+    </section>
+  `;
+  renderReadonlyTags("issueSnapshotTags", snapshot.tags || {});
+  preparePreviewImage($("issueSrcImage"), `/api/tasks/${state.taskId}/images/${issue.item_index}/src`);
+  preparePreviewImage($("issueDstImage"), `/api/tasks/${state.taskId}/images/${issue.item_index}/dst`);
+}
+
+function renderIssueImage(kind, title, itemIndex, imagePath) {
+  const id = kind === "src" ? "issueSrcImage" : "issueDstImage";
+  return `
+    <figure class="issueImagePanel">
+      <figcaption>${escapeHtml(title)}</figcaption>
+      <div class="imagePath">${escapeHtml(imagePath || "")}</div>
+      <div class="issueImageShell" data-image-kind="${escapeAttr(kind)}">
+        <img id="${id}" class="issueSelectableImage" data-image-kind="${escapeAttr(kind)}" alt="${escapeAttr(title)} #${itemIndex}" loading="lazy">
+      </div>
+    </figure>
+  `;
+}
+
+async function submitIssueAnswer() {
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) return;
+  const body = $("issueAnswerInput").value.trim();
+  if (!body) {
+    toast("请输入回答内容");
+    return;
+  }
+  const data = await api(`/api/tasks/${state.taskId}/issues/${issue.id}/answers`, {
+    method: "POST",
+    body: JSON.stringify({ author: state.username, body }),
+  });
+  replaceIssue(data.issue);
+  renderIssuesPage();
+}
+
+async function setIssueStatus(action) {
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) return;
+  const data = await api(`/api/tasks/${state.taskId}/issues/${issue.id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ username: state.username }),
+  });
+  replaceIssue(data.issue);
+  renderIssuesPage();
+}
+
+function replaceIssue(issue) {
+  state.issues = state.issues.map((item) => item.id === issue.id ? issue : item);
+  state.activeIssueId = issue.id;
+}
+
+async function openIssueResult(issue) {
+  if (!issue) return;
+  await openResultsAtItem(state.taskId, state.taskName, issue.item_index);
+}
+
+async function openResultsAtItem(taskId, taskName, itemIndex) {
+  state.taskId = taskId;
+  state.taskName = taskName;
+  state.resultPage = 0;
+  state.resultFilters = emptyFilters();
+  await reloadResults();
+  const targetPage = state.results.findIndex((item) => Number(item.item_index) === Number(itemIndex));
+  if (targetPage >= 0) {
+    state.resultPage = targetPage;
+  } else {
+    toast("结果页中没有找到该样本");
+  }
+  show("resultsView");
+  renderResultPage();
+}
+
+function exportIssuesMarkdown() {
+  if (!state.taskId) return;
+  window.location.href = `/api/tasks/${state.taskId}/issues/export.md`;
+}
+
+function openIssueModal() {
+  const item = currentResultItem();
+  if (!item) return;
+  $("issueTitleInput").value = "请检查该条标注结果";
+  $("issueBodyInput").value = "";
+  $("issueAssigneeHint").textContent = `将自动分配给 ${item.username || "未知标注人"}`;
+  $("issueModal").classList.remove("hidden");
+  $("issueModal").setAttribute("aria-hidden", "false");
+  $("issueBodyInput").focus();
+}
+
+function closeIssueModal() {
+  $("issueModal").classList.add("hidden");
+  $("issueModal").setAttribute("aria-hidden", "true");
+}
+
+async function submitResultIssue(event) {
+  event.preventDefault();
+  const item = currentResultItem();
+  if (!item) return;
+  const data = await api(`/api/tasks/${state.taskId}/issues`, {
+    method: "POST",
+    body: JSON.stringify({
+      item_index: item.item_index,
+      created_by: state.username,
+      title: $("issueTitleInput").value,
+      body: $("issueBodyInput").value,
+    }),
+  });
+  closeIssueModal();
+  toast(`Issue 已分配给 ${data.issue.assigned_to || "标注人"}`);
+}
+
+function beginIssueRegionSelection(imageKind) {
+  state.issueSelection = { imageKind };
+  toast(`在${imageKind === "src" ? "原图" : "生成图"}上拖拽框选区域`);
+}
+
+function handleIssueImageMouseDown(event) {
+  const image = event.target.closest(".issueSelectableImage");
+  if (!image || !state.issueSelection || image.dataset.imageKind !== state.issueSelection.imageKind) return;
+  event.preventDefault();
+  const shell = image.closest(".issueImageShell");
+  const rect = image.getBoundingClientRect();
+  const start = pointInRect(event, rect);
+  const box = document.createElement("div");
+  box.className = "issueImageSelection";
+  shell.appendChild(box);
+
+  const updateBox = (point) => {
+    const left = Math.min(start.x, point.x);
+    const top = Math.min(start.y, point.y);
+    const width = Math.abs(point.x - start.x);
+    const height = Math.abs(point.y - start.y);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+  };
+  const onMove = (moveEvent) => updateBox(pointInRect(moveEvent, rect));
+  const onUp = (upEvent) => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    const end = pointInRect(upEvent, rect);
+    const bbox = normalizedBbox(start, end, rect);
+    box.remove();
+    state.issueSelection = null;
+    if (bbox.w < 0.005 || bbox.h < 0.005) return;
+    insertIssueAnswerText(formatBboxReference(image.dataset.imageKind, bbox));
+  };
+  updateBox(start);
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+function pointInRect(event, rect) {
+  return {
+    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+  };
+}
+
+function normalizedBbox(start, end, rect) {
+  const left = Math.min(start.x, end.x);
+  const top = Math.min(start.y, end.y);
+  return {
+    x: left / rect.width,
+    y: top / rect.height,
+    w: Math.abs(end.x - start.x) / rect.width,
+    h: Math.abs(end.y - start.y) / rect.height,
+  };
+}
+
+function formatBboxReference(imageKind, bbox) {
+  return `[${imageKind}: x=${bbox.x.toFixed(3)} y=${bbox.y.toFixed(3)} w=${bbox.w.toFixed(3)} h=${bbox.h.toFixed(3)}]`;
+}
+
+function insertIssueAnswerText(text) {
+  const input = $("issueAnswerInput");
+  if (!input) return;
+  const prefix = input.value && !input.value.endsWith("\n") ? "\n" : "";
+  input.value = `${input.value}${prefix}${text}`;
+  input.focus();
 }
 
 async function applySettings() {
@@ -549,6 +897,8 @@ function renderResultPage() {
     $("resultsProgress").textContent = "暂无符合条件的数据";
     $("resultSrcImage").removeAttribute("src");
     $("resultDstImage").removeAttribute("src");
+    setImagePath("resultSrcPath", "");
+    setImagePath("resultDstPath", "");
     $("resultMeta").innerHTML = "";
     $("resultTags").innerHTML = '<div class="taskMeta">暂无结果</div>';
     return;
@@ -557,6 +907,8 @@ function renderResultPage() {
   $("resultsProgress").textContent = `第 ${state.resultPage + 1} / ${state.results.length} 条`;
   $("resultsJumpInput").value = state.resultPage + 1;
   $("resultsJumpInput").max = state.results.length;
+  setImagePath("resultSrcPath", imageDisplayPath(item, "src"));
+  setImagePath("resultDstPath", imageDisplayPath(item, "dst"));
   preparePreviewImage($("resultSrcImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
   preparePreviewImage($("resultDstImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
   preloadResultNeighbors();
@@ -572,18 +924,34 @@ function renderResultPage() {
 }
 
 function renderResultTags(item) {
-  const rows = flattenTags(item.tags);
+  const rows = resultTagRows(item);
   $("resultTags").innerHTML = rows
     .map((row) => `
       <div class="tagRow resultTagRow" data-qc-tag-path="${escapeAttr(JSON.stringify(row.parts || row.path.split(".")))}">
         <div></div>
         <div>
           <div class="tagKey">${escapeHtml(row.path)}</div>
-          <button class="resultTagValue editableResultValue" type="button">${escapeHtml(String(row.value))}</button>
+          <button class="resultTagValue editableResultValue" type="button">${escapeHtml(row.value == null || row.value === "" ? "未选择" : String(row.value))}</button>
         </div>
       </div>
     `)
     .join("") || '<div class="taskMeta">No tags</div>';
+}
+
+function resultTagRows(item) {
+  const rows = flattenTags(item.tags);
+  const existing = new Set(rows.map((row) => JSON.stringify(row.parts || row.path.split("."))));
+  for (const dimension of state.pairLabelOptions.dimensions || []) {
+    const parts = [state.pairLabelOptions.name, dimension.name];
+    const key = JSON.stringify(parts);
+    if (existing.has(key)) continue;
+    rows.push({
+      path: parts.join("."),
+      parts,
+      value: getNested(item.tags || {}, parts),
+    });
+  }
+  return rows;
 }
 
 function renderVisualizationPage() {
@@ -592,6 +960,8 @@ function renderVisualizationPage() {
     $("visualizationProgress").textContent = "暂无数据";
     $("visualizationSrcImage").removeAttribute("src");
     $("visualizationDstImage").removeAttribute("src");
+    setImagePath("visualizationSrcPath", "");
+    setImagePath("visualizationDstPath", "");
     $("visualizationPrompts").innerHTML = '<div class="taskMeta">暂无文字描述</div>';
     $("visualizationMeta").innerHTML = "";
     $("visualizationTags").innerHTML = '<div class="taskMeta">暂无标签</div>';
@@ -601,6 +971,8 @@ function renderVisualizationPage() {
   $("visualizationProgress").textContent = `第 ${state.visualizationPage + 1} / ${state.visualizationTotal} 条`;
   $("visualizationJumpInput").value = state.visualizationPage + 1;
   $("visualizationJumpInput").max = state.visualizationTotal;
+  setImagePath("visualizationSrcPath", imageDisplayPath(item, "src"));
+  setImagePath("visualizationDstPath", imageDisplayPath(item, "dst"));
   preparePreviewImage($("visualizationSrcImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
   preparePreviewImage($("visualizationDstImage"), `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
   preloadVisualizationNeighbors();
@@ -626,6 +998,18 @@ function renderVisualizationPrompts(prompts) {
       </section>
     `)
     .join("");
+}
+
+function imageDisplayPath(item, kind) {
+  const prefix = kind === "src" ? "src" : "dst";
+  return item?.[`${prefix}_relative_path`] || item?.[`${prefix}_image`] || "";
+}
+
+function setImagePath(targetId, value) {
+  const target = $(targetId);
+  if (!target) return;
+  target.textContent = value || "";
+  target.title = value || "";
 }
 
 function renderReadonlyTags(targetId, tags) {
@@ -865,8 +1249,23 @@ function renderStatisticsPage() {
     statistics.mos,
     ...(statistics.labels || []),
   ].filter((group) => group?.items?.length);
+  renderStatsChartToggle();
   $("statsCharts").innerHTML = chartGroups.map(renderStatsCard).join("") || '<div class="taskMeta">暂无可统计数据</div>';
   $("statsCombinations").innerHTML = (statistics.combinations || []).map(renderStatsCard).join("");
+}
+
+function renderStatsChartToggle() {
+  $("statsBarChartBtn").classList.toggle("active", state.statsChartType === "bar");
+  $("statsPieChartBtn").classList.toggle("active", state.statsChartType === "pie");
+  $("statsBarChartBtn").setAttribute("aria-pressed", String(state.statsChartType === "bar"));
+  $("statsPieChartBtn").setAttribute("aria-pressed", String(state.statsChartType === "pie"));
+}
+
+function setStatsChartType(chartType) {
+  if (!["bar", "pie"].includes(chartType)) return;
+  state.statsChartType = chartType;
+  localStorage.setItem("annotations.statsChartType", chartType);
+  renderStatisticsPage();
 }
 
 function renderStatsDimensionList(dimensions) {
@@ -885,28 +1284,79 @@ function renderStatsDimensionList(dimensions) {
 function renderStatsCard(group) {
   const items = group.items || [];
   const maxCount = Math.max(1, ...items.map((item) => item.count || 0));
+  const total = items.reduce((sum, item) => sum + Number(item.count || 0), 0);
   return `
     <section class="statsCard">
       <div class="statsCardHeader">
         <h3>${escapeHtml(group.title || "统计")}</h3>
-        <span>${items.reduce((sum, item) => sum + Number(item.count || 0), 0)} 条</span>
+        <span>${total} 条</span>
       </div>
-      <div class="statsBars">
-        ${items.map((item) => renderStatsBar(item, maxCount)).join("")}
-      </div>
+      ${state.statsChartType === "pie" ? renderStatsPie(items, total) : renderStatsBars(items, maxCount, total)}
     </section>
   `;
 }
 
-function renderStatsBar(item, maxCount) {
-  const percent = Math.max(2, Math.round((Number(item.count || 0) / maxCount) * 100));
+function renderStatsBars(items, maxCount, total) {
+  return `
+    <div class="statsBars">
+      ${items.map((item) => renderStatsBar(item, maxCount, total)).join("")}
+    </div>
+  `;
+}
+
+function renderStatsBar(item, maxCount, total) {
+  const barPercent = Math.max(2, Math.round((Number(item.count || 0) / maxCount) * 100));
+  const sharePercent = formatPercent(item.count, total);
   return `
     <div class="statsBarRow">
       <div class="statsBarLabel" title="${escapeAttr(item.label)}">${escapeHtml(item.label)}</div>
-      <div class="statsBarTrack"><div class="statsBarFill" style="width:${percent}%"></div></div>
-      <div class="statsBarCount">${item.count}</div>
+      <div class="statsBarTrack"><div class="statsBarFill" style="width:${barPercent}%"></div></div>
+      <div class="statsBarCount">${item.count}<span>${sharePercent}</span></div>
     </div>
   `;
+}
+
+function renderStatsPie(items, total) {
+  if (!total) {
+    return '<div class="taskMeta">暂无可统计数据</div>';
+  }
+  const palette = ["#2457a6", "#0f7b6c", "#c47f13", "#b42318", "#725ac1", "#2f7d32", "#a23f72", "#54616f"];
+  let start = 0;
+  const segments = items.map((item, index) => {
+    const count = Number(item.count || 0);
+    const angle = total ? (count / total) * 360 : 0;
+    const segment = `${escapeAttr(palette[index % palette.length])} ${start}deg ${start + angle}deg`;
+    start += angle;
+    return segment;
+  });
+  return `
+    <div class="statsPieWrap">
+      <div class="statsPie" style="background: conic-gradient(${segments.join(", ")});"></div>
+      <div class="statsPieLegend">
+        ${items.map((item, index) => `
+          <div class="statsPieLegendRow">
+            <span class="statsPieSwatch" style="background:${escapeAttr(palette[index % palette.length])}"></span>
+            <span class="statsPieLabel" title="${escapeAttr(item.label)}">${escapeHtml(item.label)}</span>
+            <span class="statsPieValue">${formatStatsLegendValue(item.count, total)}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function formatStatsLegendValue(count, total) {
+  return `${formatStatsLegendPercent(count, total)} (${Number(count || 0)})`;
+}
+
+function formatStatsLegendPercent(count, total) {
+  const percent = total ? (Number(count || 0) / total) * 100 : 0;
+  return `${percent.toFixed(2)}%`;
+}
+
+function formatPercent(count, total) {
+  const percent = total ? (Number(count || 0) / total) * 100 : 0;
+  return `${percent >= 10 ? percent.toFixed(1) : percent.toFixed(2)}%`;
 }
 
 function collectStatsCombination() {
@@ -945,6 +1395,13 @@ function activeFilterOptions() {
     return state.statistics.filter_options;
   }
   return state.resultFilterOptions;
+}
+
+function updatePairLabelOptionsFromFilterOptions(filterOptions) {
+  const pairGroup = (filterOptions?.label_options || []).find((group) => group.name === state.pairLabelOptions.name);
+  if (pairGroup) {
+    state.pairLabelOptions = deepClone(pairGroup);
+  }
 }
 
 function emptyFilters() {
@@ -1054,6 +1511,13 @@ function renderResultValueEditor(options, currentValue) {
 function renderResultSelectEditor(options, currentValue) {
   const select = document.createElement("select");
   select.className = "qcInlineEditor";
+  if (currentValue === undefined || currentValue === null || currentValue === "") {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "未选择";
+    empty.selected = true;
+    select.appendChild(empty);
+  }
   for (const optionValue of optionsWithCurrentValue(options, currentValue)) {
     const option = document.createElement("option");
     option.value = String(optionValue);
@@ -1291,6 +1755,7 @@ function bindEvents() {
     const taskName = button.dataset.name;
     if (button.dataset.action === "annotate") startAnnotation(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "results") openResults(taskId, taskName).catch((error) => toast(error.message));
+    if (button.dataset.action === "issues") openIssues(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "visualization") openVisualization(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "stats") openStatistics(taskId, taskName).catch((error) => toast(error.message));
     if (button.dataset.action === "refresh-labels") refreshTaskLabels(taskId, button).catch((error) => toast(error.message));
@@ -1309,6 +1774,10 @@ function bindEvents() {
     show("homeView");
     loadTasks().catch((error) => toast(error.message));
   });
+  $("backFromIssuesBtn").addEventListener("click", () => {
+    show("homeView");
+    loadTasks().catch((error) => toast(error.message));
+  });
   $("backFromVisualizationBtn").addEventListener("click", () => {
     show("homeView");
     loadTasks().catch((error) => toast(error.message));
@@ -1319,6 +1788,31 @@ function bindEvents() {
     loadTasks().catch((error) => toast(error.message));
   });
   $("openResultsFilterBtn").addEventListener("click", () => openResultsFilterDrawer());
+  $("createIssueBtn").addEventListener("click", () => openIssueModal());
+  $("cancelIssueBtn").addEventListener("click", () => closeIssueModal());
+  $("issueForm").addEventListener("submit", (event) => submitResultIssue(event).catch((error) => toast(error.message)));
+  $("exportIssuesBtn").addEventListener("click", () => exportIssuesMarkdown());
+  $("issuesList").addEventListener("click", (event) => {
+    const button = event.target.closest(".issueListItem");
+    if (!button) return;
+    state.activeIssueId = button.dataset.issueId;
+    renderIssuesPage();
+  });
+  $("issueDetail").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-issue-action]");
+    if (!button) return;
+    const action = button.dataset.issueAction;
+    const issue = state.issues.find((item) => item.id === state.activeIssueId);
+    if (action === "open-result") openIssueResult(issue).catch((error) => toast(error.message));
+    if (action === "close") setIssueStatus("close").catch((error) => toast(error.message));
+    if (action === "reopen") setIssueStatus("reopen").catch((error) => toast(error.message));
+    if (action === "answer") submitIssueAnswer().catch((error) => toast(error.message));
+    if (action === "select-src") beginIssueRegionSelection("src");
+    if (action === "select-dst") beginIssueRegionSelection("dst");
+  });
+  $("issueDetail").addEventListener("mousedown", (event) => handleIssueImageMouseDown(event));
+  $("statsBarChartBtn").addEventListener("click", () => setStatsChartType("bar"));
+  $("statsPieChartBtn").addEventListener("click", () => setStatsChartType("pie"));
   $("openStatsFilterBtn").addEventListener("click", () => openStatsFilterDrawer());
   $("applyStatsCombinationBtn").addEventListener("click", () => applyStatsCombination().catch((error) => toast(error.message)));
   $("closeResultsFilterBtn").addEventListener("click", () => closeResultsFilterDrawer());
@@ -1344,6 +1838,14 @@ function bindEvents() {
   });
   $("prevBtn").addEventListener("click", () => movePage(-1));
   $("nextBtn").addEventListener("click", () => saveAndMove(1));
+  $("tagList").addEventListener("click", (event) => {
+    const button = event.target.closest(".pairAddBtn");
+    if (!button) return;
+    const dimensionName = button.dataset.pairDimension;
+    const input = Array.from($("tagList").querySelectorAll(".pairAddInput"))
+      .find((node) => node.dataset.pairDimension === dimensionName);
+    addPairLabelOption(dimensionName, input?.value || "").catch((error) => toast(error.message));
+  });
   $("jumpBtn").addEventListener("click", async () => {
     try {
       await saveCurrent();

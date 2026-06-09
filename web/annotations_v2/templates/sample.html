@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据标注流程 V2 - 数据采样</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="sample" data-task-id="{{ task_id }}">
+  <section id="loginView" class="loginView">
+    <form id="loginForm" class="loginCard">
+      <h1>数据标注流程 V2</h1>
+      <input id="loginUsernameInput" autocomplete="username" placeholder="用户名">
+      <button type="submit">进入采样</button>
+    </form>
+  </section>
+
+  <div id="appView" class="hidden">
+    <header class="topbar hidden">
+      <div>
+        <h1>数据标注流程 V2</h1>
+        <p id="sessionLine"></p>
+      </div>
+      <div class="topbarActions">
+        <a class="buttonLike ghost" href="/">返回任务</a>
+        <button id="logoutBtn" class="ghost" type="button">退出</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel samplePage">
+        <div class="sectionHead">
+          <div>
+            <h2 id="sampleTitle">数据采样</h2>
+            <p id="sampleSummary" class="metaText"></p>
+          </div>
+          <div class="topbarActions">
+            <button id="selectAllSampleBtn" class="ghost" type="button">全选</button>
+            <button id="runSampleBtn" type="button">执行采样</button>
+          </div>
+        </div>
+        <div id="sampleBucketList" class="sampleBucketList"></div>
+        <div id="sampleResult" class="bucketGrid"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260609-sample-page"></script>
+</body>
+</html>

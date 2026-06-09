@@ -1,0 +1,28 @@
+{
+  "0": {
+    "rough_annotations": [
+      {
+        "username": "rough_user",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974990.9550452
+      }
+    ],
+    "rough": {
+      "username": "rough_user",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974990.9550452,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  }
+}

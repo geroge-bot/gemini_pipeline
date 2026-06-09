@@ -58,16 +58,25 @@ def test_describe_and_label_pairs_jsonl_writes_description_and_labels_to_preserv
                 "output_image": {"aesthetic_score": 4},
             }
 
+        def fake_user_guide_generator(original_path: Path, generated_path: Path) -> dict:
+            call_order.append("user_guide")
+            return {
+                "场景描述": "暖光中餐",
+                "整体引导": "靠近餐盘低角度拍摄拍出热菜烟火感",
+                "摆盘描述": "把主菜放在画面中央配菜沿盘边自然展开",
+            }
+
         stats = describe_and_label_pairs_jsonl(
             jsonl_path=jsonl_path,
             output_dir=output_dir,
             input_root=data_root,
             describe_func=fake_describer,
             label_func=fake_labeler,
+            user_guide_func=fake_user_guide_generator,
         )
 
         assert stats == {"processed": 1, "skipped": 0, "failed": 0}
-        assert call_order == ["description", "labels"]
+        assert call_order == ["description", "labels", "user_guide"]
 
         payload = json.loads(out_json.read_text(encoding="utf-8"))
         assert payload["existing"] is True
@@ -77,6 +86,7 @@ def test_describe_and_label_pairs_jsonl_writes_description_and_labels_to_preserv
         assert payload["generated_image_path"] == str(generated)
         assert payload["description"]["question"] == "怎么拍得好看些？"
         assert payload["labels"]["output_image"]["aesthetic_score"] == 4
+        assert payload["user_guide"]["场景描述"] == "暖光中餐"
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)
@@ -105,6 +115,10 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
                 "src_image": r"原始图片\shop\only_labels.png",
                 "dst_image": r"生成图片\shop\only_labels_p1.jpg",
             },
+            {
+                "src_image": r"原始图片\shop\only_user_guide.png",
+                "dst_image": r"生成图片\shop\only_user_guide_p1.jpg",
+            },
         ]
 
         for record in records:
@@ -119,12 +133,24 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
             "both_p1": {
                 "description": {"question": "已有问题"},
                 "labels": {"output_image": {"aesthetic_score": 5}},
+                "user_guide": {
+                    "场景描述": "已有场景",
+                    "整体引导": "已有整体引导",
+                    "摆盘描述": "已有摆盘描述",
+                },
             },
             "only_description_p1": {
                 "description": {"question": "已有问题"},
             },
             "only_labels_p1": {
                 "labels": {"output_image": {"aesthetic_score": 5}},
+            },
+            "only_user_guide_p1": {
+                "user_guide": {
+                    "场景描述": "已有场景",
+                    "整体引导": "已有整体引导",
+                    "摆盘描述": "已有摆盘描述",
+                },
             },
         }
         for stem, payload in existing_payloads.items():
@@ -137,7 +163,7 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
             encoding="utf-8",
         )
 
-        calls = {"description": 0, "labels": 0}
+        calls = {"description": 0, "labels": 0, "user_guide": 0}
 
         def fake_describer(original_path: Path, generated_path: Path) -> dict:
             calls["description"] += 1
@@ -147,16 +173,25 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
             calls["labels"] += 1
             return {"output_image": {"aesthetic_score": 3, "name": generated_path.name}}
 
+        def fake_user_guide_generator(original_path: Path, generated_path: Path) -> dict:
+            calls["user_guide"] += 1
+            return {
+                "场景描述": f"新场景:{generated_path.name}",
+                "整体引导": "靠近餐盘低角度拍摄拍出热菜烟火感",
+                "摆盘描述": "把主菜放在画面中央配菜沿盘边自然展开",
+            }
+
         stats = describe_and_label_pairs_jsonl(
             jsonl_path=jsonl_path,
             output_dir=output_dir,
             input_root=data_root,
             describe_func=fake_describer,
             label_func=fake_labeler,
+            user_guide_func=fake_user_guide_generator,
         )
 
-        assert stats == {"processed": 2, "skipped": 1, "failed": 0}
-        assert calls == {"description": 1, "labels": 1}
+        assert stats == {"processed": 3, "skipped": 1, "failed": 0}
+        assert calls == {"description": 2, "labels": 2, "user_guide": 2}
 
         both = json.loads(
             (output_dir / "生成图片" / "shop" / "both_p1.json").read_text(encoding="utf-8")
@@ -179,6 +214,15 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
         )
         assert only_labels["description"]["question"] == "新问题:only_labels_p1.jpg"
         assert only_labels["labels"]["output_image"]["aesthetic_score"] == 5
+
+        only_user_guide = json.loads(
+            (output_dir / "生成图片" / "shop" / "only_user_guide_p1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert only_user_guide["description"]["question"] == "新问题:only_user_guide_p1.jpg"
+        assert only_user_guide["labels"]["output_image"]["name"] == "only_user_guide_p1.jpg"
+        assert only_user_guide["user_guide"]["场景描述"] == "已有场景"
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)

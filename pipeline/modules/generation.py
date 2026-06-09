@@ -2,6 +2,7 @@ import os
 import re
 from pipeline.interfaces import PipelineModule, PipelineContext
 from pipeline.utils.api_client import GeminiAPIClient
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import extract_base64_from_response, base64_to_image, deterministic_seed
 from pipeline.utils.parsing import parse_camera_movement
 
@@ -79,6 +80,11 @@ class GenerationModule(PipelineModule):
                     result.generated_image_path = expected_path
                     result.status = "generated"
                     result.camera_movement = parse_camera_movement(result.original_plan)
+                    log_result_saved(
+                        call_id=getattr(client, "last_call_id", None),
+                        result_path=expected_path,
+                        result_kind="image",
+                    )
                 else:
                     raise IOError(f"Failed to write image to {expected_path}")
 

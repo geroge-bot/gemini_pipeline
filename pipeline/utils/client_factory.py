@@ -53,11 +53,13 @@ def _create_client_from_config(svc: ServiceConfig):
         return GeminiAPIClient(
             api_key=svc.api_key,
             base_url=svc.base_url,
+            service_name=svc.name,
         )
     elif svc.type == "gemini_native":
         return GeminiNativeAPIClient(
             api_key=svc.api_key,
             base_url=svc.base_url,
+            service_name=svc.name,
         )
     else:
         raise ValueError(

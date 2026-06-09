@@ -84,6 +84,65 @@ def test_label_pairs_jsonl_writes_labels_to_preserved_path_and_updates_existing_
             shutil.rmtree(scratch)
 
 
+def test_label_pairs_jsonl_logs_saved_json_when_labeler_exposes_client(monkeypatch) -> None:
+    scratch = Path(__file__).resolve().parent / "_scratch_label_pairs_logging"
+    if scratch.exists():
+        shutil.rmtree(scratch)
+
+    saved_events = []
+
+    class FakeClient:
+        last_call_id = None
+
+    fake_client = FakeClient()
+
+    try:
+        data_root = scratch / "data"
+        original = data_root / "original" / "food.png"
+        generated = data_root / "generated" / "food_p1.jpg"
+        output_dir = scratch / "labels"
+        jsonl_path = data_root / "data.jsonl"
+
+        original.parent.mkdir(parents=True)
+        generated.parent.mkdir(parents=True)
+        original.write_bytes(b"orig")
+        generated.write_bytes(b"gen")
+        jsonl_path.write_text(
+            json.dumps({"src_image": r"original\food.png", "dst_image": r"generated\food_p1.jpg"})
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_labeler(original_path: Path, generated_path: Path) -> dict:
+            fake_client.last_call_id = "call-script-label-1"
+            return {"ok": True}
+
+        fake_labeler.api_client = fake_client
+        monkeypatch.setattr(
+            "scripts.label_pairs_jsonl.log_result_saved",
+            lambda **kwargs: saved_events.append(kwargs),
+        )
+
+        label_pairs_jsonl(
+            jsonl_path=jsonl_path,
+            output_dir=output_dir,
+            input_root=data_root,
+            label_func=fake_labeler,
+            max_workers=1,
+        )
+
+        assert saved_events == [
+            {
+                "call_id": "call-script-label-1",
+                "result_path": str((output_dir / "generated" / "food_p1.json").resolve()),
+                "result_kind": "json",
+            }
+        ]
+    finally:
+        if scratch.exists():
+            shutil.rmtree(scratch)
+
+
 def test_label_pair_with_module_uses_two_image_labeler_private_pair_method() -> None:
     calls = {}
 

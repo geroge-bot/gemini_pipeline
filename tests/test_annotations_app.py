@@ -97,6 +97,34 @@ def test_create_task_splits_jsonl_into_ordered_subtasks():
     assert not (data_dir / "annotations.json").exists()
 
 
+def test_create_task_can_shuffle_items_before_splitting(monkeypatch):
+    from web.annotations import app as annotations_module
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    rows = [{"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"} for idx in range(5)]
+    write_jsonl(jsonl_path, rows)
+    monkeypatch.setattr(annotations_module.random, "shuffle", lambda items: items.reverse())
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=2, shuffle_items=True)
+
+    assert task["shuffle_items"] is True
+    assert [item["src_image"] for item in task["items"]] == [
+        "src/4.jpg",
+        "src/3.jpg",
+        "src/2.jpg",
+        "src/1.jpg",
+        "src/0.jpg",
+    ]
+    assert [subtask["item_indexes"] for subtask in task["subtasks"]] == [[0, 1], [2, 3], [4]]
+    assert [item["src_image"] for item in store._read_subtask_items(task, task["subtasks"][0])] == [
+        "src/4.jpg",
+        "src/3.jpg",
+    ]
+
+
 def test_create_task_job_reports_progress_and_summary():
     from web.annotations import app as annotations_app
     from web.annotations.app import AnnotationStore
@@ -613,6 +641,34 @@ def test_task_summary_recomputes_annotation_count_from_annotation_files():
     assert summary["annotation_count"] == len(store.get_results(task["id"], threshold=1)) == 2
 
 
+def test_backup_annotations_writes_completed_results_under_annotation_dir_backup():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    annotation_dir = tmp_path / "labels"
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"} for idx in range(2)],
+    )
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=2, annotation_dir=str(annotation_dir))
+    subtask = store.assign_subtask(task["id"], "alice")
+    store.save_annotation(task["id"], subtask["id"], item_index=0, username="alice", mos=4, tags={"ok": True})
+
+    result = store.backup_annotations()
+
+    backup_root = Path(str(annotation_dir) + "_bak")
+    backup_file = backup_root / task["id"] / "annotations" / "0.json"
+    manifest_file = backup_root / task["id"] / "manifest.json"
+    assert result["task_count"] == 1
+    assert result["annotation_count"] == 1
+    assert backup_file.exists()
+    assert json.loads(backup_file.read_text(encoding="utf-8"))["mos"] == 4
+    assert json.loads(manifest_file.read_text(encoding="utf-8"))["source_annotation_dir"] == str(annotation_dir)
+
+
 def test_results_filter_by_mos_annotator_and_label_dimensions():
     from web.annotations.app import AnnotationStore
 
@@ -693,6 +749,87 @@ def test_results_filter_supports_numeric_label_ranges():
     )
 
     assert [result["item_index"] for result in results] == [0, 1]
+
+
+def test_pair_label_options_are_global_and_filterable_across_tasks():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    first_jsonl = tmp_path / "first.jsonl"
+    second_jsonl = tmp_path / "second.jsonl"
+    write_jsonl(first_jsonl, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    write_jsonl(second_jsonl, [{"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"}])
+
+    store = AnnotationStore(tmp_path / "state.json")
+    first_task = store.create_task("first", str(tmp_path), str(first_jsonl), chunk_size=1)
+    second_task = store.create_task("second", str(tmp_path), str(second_jsonl), chunk_size=1)
+
+    options = store.add_pair_label_option("问题标签", "主体不清晰")
+
+    assert {"name": "问题标签", "options": ["主体不清晰"]} in options["dimensions"]
+    assert store.assign_subtask(first_task["id"], "alice")["pair_label_options"] == options
+    second_subtask = store.assign_subtask(second_task["id"], "bob")
+    assert second_subtask["pair_label_options"] == options
+
+    store.save_annotation(
+        second_task["id"],
+        second_subtask["id"],
+        item_index=0,
+        username="bob",
+        mos=5,
+        tags={"Pair": {"问题标签": "主体不清晰", "优势标签": "氛围自然"}},
+    )
+
+    filter_options = store.get_result_filter_options(second_task["id"])
+    pair_group = next(group for group in filter_options["label_options"] if group["name"] == "Pair")
+    assert pair_group["dimensions"] == [
+        {"name": "问题标签", "options": ["主体不清晰"]},
+        {"name": "优势标签", "options": ["氛围自然"]},
+    ]
+
+    results = store.get_results(
+        second_task["id"],
+        threshold=1,
+        filters={"labels": [{"path": ["Pair", "问题标签"], "values": ["主体不清晰"]}]},
+    )
+    assert [result["item_index"] for result in results] == [0]
+
+    statistics = store.get_statistics(
+        second_task["id"],
+        filters={"labels": [{"path": ["Pair", "优势标签"], "values": ["氛围自然"]}]},
+    )
+    assert statistics["total"] == 1
+    assert {"type": "label", "path": ["Pair", "问题标签"], "label": "Pair / 问题标签"} in statistics["available_dimensions"]
+    assert {"type": "label", "path": ["Pair", "优势标签"], "label": "Pair / 优势标签"} in statistics["available_dimensions"]
+
+
+def test_pair_label_option_api_adds_global_option():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        client = annotations_app.app.test_client()
+
+        response = client.post(
+            "/api/pair-label-options",
+            json={"dimension": "优势标签", "label": "构图稳定"},
+        )
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["pair_label_options"] == {
+            "name": "Pair",
+            "dimensions": [
+                {"name": "问题标签", "options": []},
+                {"name": "优势标签", "options": ["构图稳定"]},
+            ],
+        }
+    finally:
+        annotations_app.store = old_store
 
 
 def test_quality_check_updates_final_result_and_keeps_history():
@@ -898,6 +1035,24 @@ def test_annotation_view_exposes_abandon_subtask_action():
     assert "abandonSubtask()" in script
     assert "method: \"DELETE\"" in script
     assert "/subtasks/${state.subtask.id}" in script
+
+
+def test_create_task_form_exposes_shuffle_before_split_option():
+    template = (PROJECT_ROOT / "web" / "annotations" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="shuffleItemsInput"' in template
+    assert "随机打乱后切分" in template
+    assert 'shuffle_items: $("shuffleItemsInput").checked' in script
+
+
+def test_pie_chart_legend_groups_percent_and_count_with_label():
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+    styles = (PROJECT_ROOT / "web" / "annotations" / "static" / "styles.css").read_text(encoding="utf-8")
+
+    assert "formatStatsLegendValue(item.count, total)" in script
+    assert "<strong>${item.count}</strong>" not in script
+    assert "12px minmax(90px, 1fr) auto minmax(58px, auto)" not in styles
 
 
 def test_statistics_counts_filtered_dimensions_and_combinations():
@@ -1169,6 +1324,44 @@ def test_task_list_exposes_input_preview_cache_action_after_visualization():
     assert "warmInputPreviewCache(taskId, button)" in script
 
 
+def test_task_list_only_renders_delete_action_for_admin_user_at_the_end():
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+    render_start = script.index("function renderTasks()")
+    render_end = script.index("async function deleteTask", render_start)
+    render_tasks = script[render_start:render_end]
+
+    assert 'state.username === "孙本猿"' in render_tasks
+    assert render_tasks.index('data-action="cache-inputs"') < render_tasks.index('data-action="delete"')
+    assert render_tasks.rindex('data-action="delete"') > render_tasks.rindex('data-action="cache-inputs"')
+
+
+def test_issue_ui_exposes_task_result_and_detail_actions():
+    template = (PROJECT_ROOT / "web" / "annotations" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert '"issuesView"' in script
+    assert 'id="issuesView"' in template
+    assert 'data-action="issues"' in script
+    assert 'id="createIssueBtn"' in template
+    assert 'id="issueModal"' in template
+    assert 'id="issueAnswerInput"' in script
+    assert 'openIssues(taskId, taskName)' in script
+    assert 'openIssueModal()' in script
+    assert 'submitIssueAnswer()' in script
+
+
+def test_issue_ui_supports_markdown_export_and_bbox_insertion():
+    script = (PROJECT_ROOT / "web" / "annotations" / "static" / "app.js").read_text(encoding="utf-8")
+    styles = (PROJECT_ROOT / "web" / "annotations" / "static" / "styles.css").read_text(encoding="utf-8")
+
+    assert '/issues/export.md' in script
+    assert 'function formatBboxReference' in script
+    assert 'function beginIssueRegionSelection' in script
+    assert '[${imageKind}: x=${' in script
+    assert 'issueImageSelection' in styles
+    assert 'issueModalCard' in styles
+
+
 def test_preview_cache_dir_can_be_configured_by_environment(monkeypatch):
     from web.annotations.app import AnnotationStore
 
@@ -1244,6 +1437,120 @@ def test_downloads_export_all_annotated_results_as_jsonl_and_xlsx():
         annotations_app.store = old_store
 
 
+def test_issue_creation_assigns_annotator_and_snapshots_result():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=1)
+    subtask = store.assign_subtask(task["id"], "alice")
+    store.save_annotation(task["id"], subtask["id"], 0, "alice", 3, {"quality": "needs review"})
+
+    issue = store.create_issue(
+        task["id"],
+        item_index=0,
+        created_by="reviewer",
+        title="Please check score",
+        body="MOS looks too low",
+    )
+
+    assert issue["status"] == "open"
+    assert issue["created_by"] == "reviewer"
+    assert issue["assigned_to"] == "alice"
+    assert issue["item_index"] == 0
+    assert issue["snapshot"]["mos"] == 3
+    assert issue["snapshot"]["tags"] == {"quality": "needs review"}
+    assert issue["snapshot"]["src_image"] == "src/a.jpg"
+    assert issue["snapshot"]["dst_image"] == "dst/a.jpg"
+    assert store.list_issues(task["id"])[0]["id"] == issue["id"]
+
+
+def test_issue_answers_status_changes_and_markdown_export():
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationStore(tmp_path / "state.json")
+    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=1)
+    subtask = store.assign_subtask(task["id"], "alice")
+    store.save_annotation(task["id"], subtask["id"], 0, "alice", 4, {"dish": "noodle"})
+    issue = store.create_issue(task["id"], 0, "reviewer", "", "")
+
+    answered = store.add_issue_answer(
+        task["id"],
+        issue["id"],
+        "alice",
+        "Region is correct [dst: x=0.100 y=0.200 w=0.300 h=0.400]",
+    )
+    closed = store.close_issue(task["id"], issue["id"], "reviewer")
+    reopened = store.reopen_issue(task["id"], issue["id"], "reviewer")
+    markdown = store.export_issues_markdown(task["id"])
+
+    assert answered["answers"][0]["author"] == "alice"
+    assert answered["answers"][0]["body"] == "Region is correct [dst: x=0.100 y=0.200 w=0.300 h=0.400]"
+    assert closed["status"] == "closed"
+    assert closed["closed_by"] == "reviewer"
+    assert reopened["status"] == "open"
+    assert reopened["closed_at"] is None
+    assert "# Issues for food" in markdown
+    assert "Assignee: alice" in markdown
+    assert "src/a.jpg" in markdown
+    assert "Region is correct [dst: x=0.100 y=0.200 w=0.300 h=0.400]" in markdown
+
+
+def test_issue_api_endpoints_create_answer_close_reopen_and_export_markdown():
+    from web.annotations import app as annotations_app
+    from web.annotations.app import AnnotationStore
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=1)
+        subtask = annotations_app.store.assign_subtask(task["id"], "alice")
+        annotations_app.store.save_annotation(task["id"], subtask["id"], 0, "alice", 5, {"ok": True})
+        client = annotations_app.app.test_client()
+
+        create_response = client.post(
+            f"/api/tasks/{task['id']}/issues",
+            json={"item_index": 0, "created_by": "reviewer", "title": "", "body": "Please explain"},
+        )
+        issue = create_response.get_json()["issue"]
+        answer_response = client.post(
+            f"/api/tasks/{task['id']}/issues/{issue['id']}/answers",
+            json={"author": "alice", "body": "Because [src: x=0.000 y=0.100 w=0.200 h=0.300]"},
+        )
+        close_response = client.post(
+            f"/api/tasks/{task['id']}/issues/{issue['id']}/close",
+            json={"username": "reviewer"},
+        )
+        reopen_response = client.post(
+            f"/api/tasks/{task['id']}/issues/{issue['id']}/reopen",
+            json={"username": "reviewer"},
+        )
+        export_response = client.get(f"/api/tasks/{task['id']}/issues/export.md")
+
+        assert create_response.status_code == 201
+        assert issue["title"] == "请检查该条标注结果"
+        assert issue["assigned_to"] == "alice"
+        assert answer_response.get_json()["issue"]["answers"][0]["author"] == "alice"
+        assert close_response.get_json()["issue"]["status"] == "closed"
+        assert reopen_response.get_json()["issue"]["status"] == "open"
+        assert export_response.mimetype == "text/markdown"
+        assert "Please explain" in export_response.data.decode("utf-8")
+    finally:
+        annotations_app.store = old_store
+
+
 def test_jsonl_download_with_non_ascii_task_name_returns_over_http():
     from werkzeug.serving import make_server
     from web.annotations import app as annotations_app
@@ -1282,17 +1589,29 @@ def test_jsonl_download_with_non_ascii_task_name_returns_over_http():
         annotations_app.store = old_store
 
 
-def test_delete_task_removes_task_and_reports_missing_task():
+def test_delete_task_api_requires_admin_user_and_reports_missing_task():
+    from web.annotations import app as annotations_app
     from web.annotations.app import AnnotationStore
 
     tmp_path = make_workspace_tmp()
     jsonl_path = tmp_path / "data.jsonl"
     write_jsonl(jsonl_path, [{"src_image": "a.jpg", "dst_image": "b.jpg"}])
 
-    store = AnnotationStore(tmp_path / "state.json")
-    task = store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=1)
+    old_store = annotations_app.store
+    annotations_app.store = AnnotationStore(tmp_path / "state.json")
+    annotations_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_app.store.create_task("food", str(tmp_path), str(jsonl_path), chunk_size=1)
+        client = annotations_app.app.test_client()
 
-    assert store.delete_task(task["id"]) is True
-    assert store.get_task(task["id"]) is None
-    assert store.list_tasks() == []
-    assert store.delete_task(task["id"]) is False
+        forbidden = client.delete(f"/api/tasks/{task['id']}", json={"username": "alice"})
+        response = client.delete(f"/api/tasks/{task['id']}", json={"username": "孙本猿"})
+        missing = client.delete(f"/api/tasks/{task['id']}", json={"username": "孙本猿"})
+
+        assert forbidden.status_code == 403
+        assert response.status_code == 200
+        assert annotations_app.store.get_task(task["id"]) is None
+        assert annotations_app.store.list_tasks() == []
+        assert missing.status_code == 404
+    finally:
+        annotations_app.store = old_store

@@ -1,0 +1,2954 @@
+{
+  "2": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837330.3717802
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975053.973786,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975053.973786
+      }
+    ]
+  },
+  "26": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837340.299416
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975064.1017
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975064.1017,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "0": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837328.132396
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975053.229228,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975053.229228
+      }
+    ]
+  },
+  "1": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837329.764637
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975053.591281,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975053.591281
+      }
+    ]
+  },
+  "3": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837330.820684
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975054.40558,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975054.40558
+      }
+    ]
+  },
+  "4": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837331.204563
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975054.8100789,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975054.8100789
+      }
+    ]
+  },
+  "5": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837331.560556
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975055.220672,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975055.220672
+      }
+    ]
+  },
+  "6": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837331.9236019
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975056.985718,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975056.985718
+      }
+    ]
+  },
+  "7": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837332.340035
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975057.36472,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975057.36472
+      }
+    ]
+  },
+  "8": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837332.7347
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975057.657583,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975057.657583
+      }
+    ]
+  },
+  "9": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837333.089258
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975057.994828,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975057.994828
+      }
+    ]
+  },
+  "10": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837333.454531
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975058.319883,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975058.319883
+      }
+    ]
+  },
+  "11": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837333.892313
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975058.5350342,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975058.5350342
+      }
+    ]
+  },
+  "12": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837334.37921
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975058.7716942,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975058.7716942
+      }
+    ]
+  },
+  "13": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837334.821235
+    },
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975059.010771,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975059.010771
+      }
+    ]
+  },
+  "14": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837335.271569
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975059.261647
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975059.261647,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "15": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837335.681129
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 1,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975059.471049
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 1,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975059.471049,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "16": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837336.098598
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975059.929749
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975059.929749,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "17": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837336.485612
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975060.410608
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975060.410608,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "18": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837336.9435751
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975060.8421938
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975060.8421938,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "19": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837337.3280158
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975061.25486
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975061.25486,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "20": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837337.7794712
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975061.703294
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975061.703294,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "21": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837338.20454
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975061.939887
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975061.939887,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "22": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837338.596579
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975062.4177668
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975062.4177668,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "23": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837339.10681
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975062.8322382
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975062.8322382,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "24": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837339.498087
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975063.2630138
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975063.2630138,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "25": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837339.9144151
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975063.687066
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975063.687066,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "27": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837340.539586
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975064.518791
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975064.518791,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "28": {
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780837341.467629
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975064.756178
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975064.756178,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3784": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": true,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780973646.572105
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": true,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780973646.572105,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3785": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": true,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780973657.636721
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": true,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780973657.636721,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3786": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780973665.68302
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780973665.68302,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3787": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780973671.216985
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780973671.216985,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3788": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974882.832622
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974882.832622,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975059.70047
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975059.70047,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3789": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974883.66193
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974883.66193,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975060.17276
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975060.17276,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3790": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974884.3028128
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974884.3028128,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975060.6232178
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975060.6232178,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3791": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974885.094666
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974885.094666,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975061.046314
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975061.046314,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3792": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974885.5226948
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974885.5226948,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975061.490978
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975061.490978,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3793": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974886.181545
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974886.181545,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3794": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974886.5662332
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974886.5662332,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975062.1855612
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975062.1855612,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3795": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974887.053201
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974887.053201,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975062.616579
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975062.616579,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3796": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974887.331978
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974887.331978,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975063.058688
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975063.058688,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3797": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974887.630262
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974887.630262,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975063.474138
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975063.474138,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3798": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974888.134783
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974888.134783,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975063.906357
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975063.906357,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3799": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974888.367929
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974888.367929,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975064.322285
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975064.322285,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3800": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974888.6416771
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974888.6416771,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3801": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974888.887156
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974888.887156,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3802": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974889.117986
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974889.117986,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975064.95877
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975064.95877,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3803": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974889.4528441
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974889.4528441,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975065.1684082
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975065.1684082,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3804": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974890.0478709
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974890.0478709,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975065.385685
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975065.385685,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3805": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974890.542026
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974890.542026,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3806": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974890.8658938
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974890.8658938,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975065.601011
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975065.601011,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3807": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974959.3064718
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974959.3064718,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975065.826293
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975065.826293,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3808": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974959.944109
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974959.944109,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975066.030228
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975066.030228,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3809": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974961.5526662
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974961.5526662,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780974983.228194
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780974983.228194,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3810": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975038.267571
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975038.267571,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975052.4537458
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975052.4537458,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3811": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975039.813369
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975039.813369,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975052.870511
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975052.870511,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3812": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975041.237513
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975041.237513,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3813": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975042.313748
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975042.313748,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3814": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975042.9506502
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975042.9506502,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3815": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975043.263665
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975043.263665,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3816": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975043.566794
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975043.566794,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3817": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975043.881432
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975043.881432,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3818": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975044.1344671
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975044.1344671,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3819": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975044.459987
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975044.459987,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3820": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975044.763275
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975044.763275,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3821": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975045.123349
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975045.123349,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3822": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975045.5830011
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975045.5830011,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3823": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975045.88539
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975045.88539,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4612": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975521.924072
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975521.924072,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4613": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975522.619178
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975522.619178,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4614": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975523.578657
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975523.578657,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4615": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975524.724407
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975524.724407,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4616": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975525.58672
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975525.58672,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4617": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975526.210708
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975526.210708,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4618": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975526.8351948
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975526.8351948,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4619": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975527.3468711
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975527.3468711,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4620": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975528.011313
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975528.011313,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4720": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975845.084758
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975845.084758,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4721": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975851.875146
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975851.875146,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4722": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": true,
+        "primary_issue": "",
+        "issues": [
+          "主体问题"
+        ],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975854.701966
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": true,
+      "primary_issue": "",
+      "issues": [
+        "主体问题"
+      ],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975854.701966,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4723": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [
+          "主体问题",
+          "构图问题"
+        ],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975857.467167
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [
+        "主体问题",
+        "构图问题"
+      ],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975857.467167,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4724": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780975859.6503282
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780975859.6503282,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  }
+}

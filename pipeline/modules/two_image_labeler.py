@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pipeline.interfaces import PipelineContext, PipelineModule
 from pipeline.utils.api_client import GeminiAPIClient
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import image_to_base64
 
 
@@ -143,6 +144,11 @@ class TwoImageLabelingModule(PipelineModule):
 
                 target_dir = os.path.dirname(result.generated_image_path)
                 saved_json = result.save_json(target_dir)
+                log_result_saved(
+                    call_id=getattr(client, "last_call_id", None),
+                    result_path=saved_json,
+                    result_kind="json",
+                )
                 print(f"  -> Labels done for {result.theme}, saved: {os.path.basename(saved_json)}")
             except Exception as e:
                 print(f"  -> [ERROR] Labeling failed on {result.theme}: {e}")

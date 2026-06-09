@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from pipeline.config import DEFAULT_MODEL_ANALYSIS, DEFAULT_SERVICE_TEXT
 from pipeline.modules.description import DescriptionModule, _strip_images_from_messages
+from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.client_factory import create_client_from_service
 from pipeline.utils.file_ops import image_to_base64
 
@@ -44,6 +45,11 @@ def iter_jsonl_records(jsonl_path: str | Path) -> Iterable[tuple[int, dict]]:
             if not line:
                 continue
             yield line_no, json.loads(line)
+
+
+def _last_call_id_from_callable(func: PairDescriber) -> str | None:
+    client = getattr(func, "api_client", None)
+    return getattr(client, "last_call_id", None)
 
 
 def describe_pair_with_module(
@@ -141,6 +147,11 @@ def describe_pairs_jsonl(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        log_result_saved(
+            call_id=_last_call_id_from_callable(describe_func),
+            result_path=str(out_json),
+            result_kind="json",
+        )
         return index, dst_image, out_json
 
     futures = {}
@@ -229,6 +240,7 @@ def main() -> None:
             client=client,
             model=args.model,
         )
+    describe_func.api_client = client
 
     stats = describe_pairs_jsonl(
         jsonl_path=args.jsonl_path,

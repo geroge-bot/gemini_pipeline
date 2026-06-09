@@ -8,11 +8,14 @@ import requests
 import base64
 import io
 import time
+import threading
 from typing import Optional, Union, List, Dict, Any
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from PIL import Image
 
 from pipeline.utils.api_client import resize_image_b64
+from pipeline.utils.api_usage_logger import extract_gemini_usage, log_api_call
+from pipeline.utils.service_manager import ServiceManager
 
 
 class GeminiNativeAPIError(Exception):
@@ -37,7 +40,13 @@ class GeminiNativeAPIClient:
         }
     """
 
-    def __init__(self, api_key: str, base_url: str, timeout: float = 120.0):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        timeout: float = 120.0,
+        service_name: Optional[str] = None,
+    ):
         """
         Args:
             api_key:  Gemini API key (used as Bearer token).
@@ -48,6 +57,50 @@ class GeminiNativeAPIClient:
         self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
+        self.service_name = service_name
+        self._thread_state = threading.local()
+
+    @property
+    def last_call_id(self):
+        return getattr(self._thread_state, "last_call_id", None)
+
+    @last_call_id.setter
+    def last_call_id(self, value):
+        self._thread_state.last_call_id = value
+
+    def _model_name(self) -> Optional[str]:
+        marker = "/models/"
+        if marker not in self.base_url:
+            return None
+        tail = self.base_url.split(marker, 1)[1]
+        return tail.split(":", 1)[0].split("/", 1)[0]
+
+    def _log_response(self, operation: str, response_data: Dict[str, Any]) -> None:
+        token_usage, raw_usage = extract_gemini_usage(response_data.get("usageMetadata"))
+        model = self._model_name()
+        preview = None
+        try:
+            for part in response_data["candidates"][0]["content"]["parts"]:
+                if "text" in part:
+                    preview = part["text"]
+                    break
+        except Exception:
+            preview = None
+        self.last_call_id = log_api_call(
+            service_format="gemini_native",
+            service_name=self.service_name
+            or ServiceManager.find_matching_service_name(
+                service_type="gemini_native",
+                api_key=self.api_key,
+                base_url=self.base_url,
+                model=model or "",
+            ),
+            operation=operation,
+            model=model,
+            token_usage=token_usage,
+            raw_usage=raw_usage,
+            result_preview=preview,
+        )
 
     def _build_headers(self) -> dict:
         return {
@@ -112,6 +165,7 @@ class GeminiNativeAPIClient:
             )
             response.raise_for_status()
             response_data = response.json()
+            self._log_response("vl_dialogue" if image_b64 else "text_dialogue", response_data)
             return response_data["candidates"][0]["content"]["parts"][0]["text"]
         except requests.HTTPError as e:
             error_detail = ""
@@ -166,6 +220,7 @@ class GeminiNativeAPIClient:
             )
             response.raise_for_status()
             response_data = response.json()
+            self._log_response("image_generation", response_data)
 
             # Extract the inlineData base64 from the response
             resp_parts = response_data["candidates"][0]["content"]["parts"]
@@ -219,6 +274,7 @@ class GeminiNativeAPIClient:
             )
             response.raise_for_status()
             response_data = response.json()
+            self._log_response("vl_dialogue", response_data)
             return response_data["candidates"][0]["content"]["parts"][0]["text"]
         except requests.HTTPError as e:
             error_detail = ""
@@ -306,6 +362,8 @@ class GeminiNativeAPIClient:
             )
             response.raise_for_status()
             response_data = response.json()
+            has_image = any("inlineData" in part for item in contents for part in item.get("parts", []))
+            self._log_response("vl_dialogue" if has_image else "text_dialogue", response_data)
             return response_data["candidates"][0]["content"]["parts"][0]["text"]
         except requests.HTTPError as e:
             error_detail = ""

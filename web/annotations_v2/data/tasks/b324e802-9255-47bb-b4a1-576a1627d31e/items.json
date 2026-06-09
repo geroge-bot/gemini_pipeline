@@ -1,0 +1,8 @@
+[
+  {
+    "item_index": 0,
+    "src_image": "src/a.jpg",
+    "dst_image": "dst/a.jpg",
+    "labels": {}
+  }
+]

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据标注流程 V2 - 标注</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="rate" data-task-id="{{ task_id }}">
+  <section id="loginView" class="loginView">
+    <form id="loginForm" class="loginCard">
+      <h1>数据标注流程 V2</h1>
+      <input id="loginUsernameInput" autocomplete="username" placeholder="用户名">
+      <button type="submit">进入标注</button>
+    </form>
+  </section>
+
+  <div id="appView" class="hidden">
+    <header class="topbar hidden">
+      <div>
+        <h1>数据标注流程 V2</h1>
+        <p id="sessionLine"></p>
+      </div>
+      <div class="topbarActions">
+        <a class="buttonLike ghost" href="/">返回任务</a>
+        <button id="logoutBtn" class="ghost" type="button">退出</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="workbench" class="workbench">
+        <div class="workHeader">
+          <div>
+            <strong id="workTitle"></strong>
+            <span id="workProgress"></span>
+          </div>
+          <div class="pager">
+            <button id="prevBtn" class="ghost" type="button">上一条</button>
+            <button id="nextBtn" type="button">下一条（Space）</button>
+          </div>
+        </div>
+
+        <div id="emptyStage" class="panel hidden">暂无数据</div>
+
+        <div id="stageBody" class="stageGrid">
+          <figure>
+            <figcaption>原图</figcaption>
+            <img id="srcImage" alt="原图">
+          </figure>
+          <figure>
+            <figcaption>目标图</figcaption>
+            <img id="dstImage" alt="目标图">
+          </figure>
+          <div id="ratingControls" class="panel annotationPanel">
+            <form id="stageForm" class="stageForm"></form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260609-label-choice-bars"></script>
+</body>
+</html>

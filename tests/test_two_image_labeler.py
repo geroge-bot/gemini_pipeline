@@ -74,18 +74,25 @@ def test_two_image_labeling_module_writes_labels(monkeypatch) -> None:
         },
     }
     calls = {}
+    saved_events = []
 
     class FakeClient:
         def __init__(self, api_key, base_url):
             calls["api_key"] = api_key
             calls["base_url"] = base_url
+            self.last_call_id = None
 
         def generate_with_messages(self, messages, model):
             calls["messages"] = messages
             calls["model"] = model
+            self.last_call_id = "call-label-1"
             return json.dumps(expected, ensure_ascii=False)
 
     monkeypatch.setattr("pipeline.modules.two_image_labeler.GeminiAPIClient", FakeClient)
+    monkeypatch.setattr(
+        "pipeline.modules.two_image_labeler.log_result_saved",
+        lambda **kwargs: saved_events.append(kwargs),
+    )
     monkeypatch.setattr(
         "pipeline.modules.two_image_labeler.image_to_base64",
         lambda path: "orig-b64" if Path(path).name == "original.jpg" else "gen-b64",
@@ -106,6 +113,13 @@ def test_two_image_labeling_module_writes_labels(monkeypatch) -> None:
 
         saved = json.loads((scratch / "generated.json").read_text(encoding="utf-8"))
         assert saved["labels"] == expected
+        assert saved_events == [
+            {
+                "call_id": "call-label-1",
+                "result_path": str(scratch / "generated.json"),
+                "result_kind": "json",
+            }
+        ]
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)
