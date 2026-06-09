@@ -718,6 +718,23 @@ class AnnotationV2Store:
         self._write_state(state)
         return payload
 
+    def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        state = self._read_state()
+        task = self._find_task(state, task_id)
+        if not task:
+            raise KeyError("task not found")
+
+        rough_payload = payload.get("rough") if isinstance(payload.get("rough"), dict) else {}
+        if "issue_options" in rough_payload or "issue_options" in payload:
+            task.setdefault("rough", {})["issue_options"] = normalize_issue_options(
+                rough_payload.get("issue_options", payload.get("issue_options", []))
+            )
+        if "selected_label_paths" in payload:
+            task["selected_label_paths"] = normalize_label_paths(payload.get("selected_label_paths"))
+
+        self._write_state(state)
+        return self._task_payload(task)
+
     def _task_payload(self, task: dict[str, Any]) -> dict[str, Any]:
         payload = deepcopy(task)
         payload["label_option_groups"] = deepcopy(LABEL_OPTION_GROUPS)
@@ -1432,6 +1449,11 @@ def api_tasks():
 def api_create_task():
     task = store.create_task(request.get_json(force=True) or {})
     return jsonify({"task": task}), 201
+
+
+@app.patch("/api/tasks/<task_id>")
+def api_update_task(task_id: str):
+    return jsonify({"task": store.update_task(task_id, request.get_json(force=True) or {})})
 
 
 @app.delete("/api/tasks/<task_id>")

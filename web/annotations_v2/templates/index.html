@@ -63,7 +63,29 @@
     </main>
   </div>
 
+  <div id="taskEditOverlay" class="modalOverlay hidden"></div>
+  <section id="taskEditDialog" class="modalPanel hidden" role="dialog" aria-modal="true" aria-labelledby="editTaskTitle">
+    <form id="editTaskForm" class="modalContent">
+      <div class="sectionHead">
+        <h2 id="editTaskTitle">编辑任务</h2>
+        <button id="closeEditTaskBtn" class="ghost" type="button">关闭</button>
+      </div>
+      <label>
+        问题类型
+        <textarea id="editIssueOptionsInput" rows="5" placeholder="问题类型，用逗号或换行分隔"></textarea>
+      </label>
+      <label>
+        需要纠错的标签类型
+        <textarea id="editLabelPathsInput" rows="5" placeholder="标签纠错路径，例如 输入图/菜品种类"></textarea>
+      </label>
+      <div class="modalActions">
+        <button id="cancelEditTaskBtn" class="ghost" type="button">取消</button>
+        <button type="submit">保存</button>
+      </div>
+    </form>
+  </section>
+
   <div id="toast" class="toast hidden"></div>
-  <script src="{{ url_for('static', filename='app.js') }}?v=20260609-label-queue-refresh"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260609-task-editing"></script>
 </body>
 </html>
