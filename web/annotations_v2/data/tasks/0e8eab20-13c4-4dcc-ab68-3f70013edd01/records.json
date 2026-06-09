@@ -1,0 +1,389 @@
+{
+  "1348": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977139.384057
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977139.384057,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977159.736692
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977159.736692,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "拍摄场景": "室内",
+          "菜品种类": "下午茶",
+          "菜品数量": 3,
+          "光线": "自然光"
+        },
+        "输出图": {
+          "拍摄角度方法": "平拍"
+        }
+      },
+      "updated_at": 1780982309.507006
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=室内 | 输入图/菜品种类=下午茶 | 输入图/菜品数量=3 | 输出图/拍摄角度方法=平拍 | 输入图/光线=自然光"
+  },
+  "1349": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977140.401388
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977140.401388,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977160.576938
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977160.576938,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "拍摄场景": "居家",
+          "菜品种类": "下午茶",
+          "菜品数量": 4,
+          "光线": "自然光"
+        },
+        "输出图": {
+          "拍摄角度方法": "斜拍"
+        }
+      },
+      "updated_at": 1780982030.0789812
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=居家 | 输入图/菜品种类=下午茶 | 输入图/菜品数量=4 | 输出图/拍摄角度方法=斜拍 | 输入图/光线=自然光"
+  },
+  "1350": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977147.296275
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977147.296275,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977163.696297
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977163.696297,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "拍摄场景": "餐厅",
+          "菜品种类": "下午茶",
+          "菜品数量": 3,
+          "光线": "顶灯"
+        },
+        "输出图": {
+          "拍摄角度方法": "斜拍"
+        }
+      },
+      "updated_at": 1780982030.3023171
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=餐厅 | 输入图/菜品种类=下午茶 | 输入图/菜品数量=3 | 输出图/拍摄角度方法=斜拍 | 输入图/光线=顶灯"
+  },
+  "1351": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977150.9605582
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977150.9605582,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977164.352714
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977164.352714,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "拍摄场景": "餐厅",
+          "菜品种类": "下午茶",
+          "菜品数量": 3,
+          "光线": "其他"
+        },
+        "输出图": {
+          "拍摄角度方法": "斜拍"
+        }
+      },
+      "updated_at": 1780982030.5270379
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=餐厅 | 输入图/菜品种类=下午茶 | 输入图/菜品数量=3 | 输出图/拍摄角度方法=斜拍 | 输入图/光线=其他"
+  },
+  "1352": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977151.737262
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977151.737262,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977165.1623192
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977165.1623192,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "拍摄场景": "室外",
+          "菜品种类": "野餐露营",
+          "菜品数量": 1,
+          "光线": "自然光"
+        },
+        "输出图": {
+          "拍摄角度方法": "平拍"
+        }
+      },
+      "updated_at": 1780982030.779596
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=室外 | 输入图/菜品种类=野餐露营 | 输入图/菜品数量=1 | 输出图/拍摄角度方法=平拍 | 输入图/光线=自然光"
+  },
+  "1353": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780977152.4806662
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780977152.4806662,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982014.9690518
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982014.9690518,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/拍摄场景=室外 | 输入图/菜品种类=野餐露营 | 输入图/菜品数量=1 | 输出图/拍摄角度方法=斜拍 | 输入图/光线=自然光"
+  }
+}

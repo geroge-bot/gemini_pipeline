@@ -247,6 +247,18 @@ def nested_set(target: dict[str, Any], path: list[str], value: Any) -> None:
         cursor[path[-1]] = value
 
 
+def nested_overlay(target: dict[str, Any], source: dict[str, Any]) -> None:
+    for key, value in source.items():
+        if isinstance(value, dict):
+            child = target.setdefault(str(key), {})
+            if isinstance(child, dict):
+                nested_overlay(child, value)
+            else:
+                target[str(key)] = deepcopy(value)
+        else:
+            target[str(key)] = deepcopy(value)
+
+
 def clean_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -788,7 +800,7 @@ class AnnotationV2Store:
                 not self._stage_complete(task, record, "rough") or not self._rough_passes(task, record.get("rough"))
             ):
                 continue
-            if stage == "label" and not record.get("sampled"):
+            if stage == "label" and (not record.get("sampled") or record.get("label")):
                 continue
             if stage not in {"rough", "fine", "label"}:
                 raise ValueError("未知阶段")
@@ -817,12 +829,32 @@ class AnnotationV2Store:
                 payload_record[stage] = user_annotation
             elif f"{stage}_annotations" in payload_record:
                 payload_record.pop(stage, None)
+        if stage == "label":
+            payload_record["label_draft"] = {"labels": self._label_draft_labels(task, item, payload_record)}
         payload["record"] = payload_record
         payload["image_urls"] = {
             "src": f"/api/tasks/{task['id']}/images/{item['item_index']}/src",
             "dst": f"/api/tasks/{task['id']}/images/{item['item_index']}/dst",
         }
         return payload
+
+    def _label_draft_labels(
+        self,
+        task: dict[str, Any],
+        item: dict[str, Any],
+        record: dict[str, Any],
+    ) -> dict[str, Any]:
+        draft = {}
+        paths = task.get("selected_label_paths") or flatten_label_paths(item.get("labels", {}))
+        for path in paths:
+            normalized_path = [str(part) for part in path]
+            value = nested_get(item.get("labels", {}), normalized_path)
+            if value not in (None, ""):
+                nested_set(draft, normalized_path, deepcopy(value))
+        label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+        saved_labels = label_record.get("labels") if isinstance(label_record.get("labels"), dict) else {}
+        nested_overlay(draft, saved_labels)
+        return draft
 
     def save_rough(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)

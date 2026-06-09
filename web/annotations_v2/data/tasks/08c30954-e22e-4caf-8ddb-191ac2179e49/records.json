@@ -1,0 +1,532 @@
+{
+  "1348": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982668.188799
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982668.188799,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "1362": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982669.266148
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982669.266148,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982684.192971
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982684.192971,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营 | 输入图/光线=自然光",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "野餐露营",
+          "光线": "自然光"
+        }
+      },
+      "updated_at": 1780986765.146656
+    }
+  },
+  "1376": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982669.8521721
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982669.8521721,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982684.911519
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982684.911519,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=中餐 | 输入图/光线=顶灯"
+  },
+  "1390": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982670.370893
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982670.370893,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982684.413573
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982684.413573,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=其他"
+  },
+  "1404": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982671.2186508
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982671.2186508,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982683.9881651
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982683.9881651,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=其他"
+  },
+  "1418": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": true,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982673.4594262
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": true,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982673.4594262,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "1432": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982674.796809
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982674.796809,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982683.384872
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982683.384872,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=自然光"
+  },
+  "1446": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982675.242302
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982675.242302,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982685.346986
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982685.346986,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐 | 输入图/光线=其他"
+  },
+  "1460": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982675.792607
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982675.792607,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982684.675493
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982684.675493,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=自然光"
+  },
+  "1474": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982676.907607
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982676.907607,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982685.095988
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982685.095988,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=顶灯"
+  },
+  "1488": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982677.474738
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982677.474738,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1780982685.583552
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1780982685.583552,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶 | 输入图/光线=顶灯"
+  }
+}

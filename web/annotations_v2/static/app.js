@@ -300,7 +300,7 @@ function renderStageForm(item) {
     `;
     return;
   }
-  const currentLabels = record.label?.labels || pickSelectedLabels(item.labels || {});
+  const currentLabels = labelDraftLabels(item);
   form.innerHTML = `
     <h2>标签纠错</h2>
     <div id="labelEditor" class="labelEditor">${labelChoiceInputs(currentLabels)}</div>
@@ -378,6 +378,29 @@ function pickSelectedLabels(labels) {
   return result;
 }
 
+function labelDraftLabels(item) {
+  const record = item.record || {};
+  const draftLabels = record.label_draft?.labels || pickSelectedLabels(item.labels || {});
+  return mergeLabelObjects(draftLabels, record.label?.labels || {});
+}
+
+function mergeLabelObjects(baseLabels, overrideLabels) {
+  const result = JSON.parse(JSON.stringify(baseLabels || {}));
+  overlayLabels(result, overrideLabels || {});
+  return result;
+}
+
+function overlayLabels(target, source) {
+  for (const [key, value] of Object.entries(source || {})) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if (!target[key] || typeof target[key] !== "object" || Array.isArray(target[key])) target[key] = {};
+      overlayLabels(target[key], value);
+    } else {
+      target[key] = value;
+    }
+  }
+}
+
 function labelCorrectionPaths() {
   const selected = state.activeTask?.selected_label_paths || [];
   if (selected.length) return selected;
@@ -420,6 +443,7 @@ function renderLabelChoiceGroup(path, currentValue) {
     input.dataset.optionValue = JSON.stringify(option);
     input.value = String(option);
     input.checked = String(currentValue) === String(option);
+    if (input.checked) input.setAttribute("checked", "checked");
     const span = document.createElement("span");
     span.textContent = String(option);
     label.appendChild(input);
@@ -460,6 +484,10 @@ function isScreeningStage() {
   return state.page === "rate" && ["rough", "fine"].includes(state.stage);
 }
 
+function isRatePagingStage() {
+  return state.page === "rate" && ["rough", "fine", "label"].includes(state.stage);
+}
+
 function selectMosScore(score) {
   const input = document.querySelector(`input[name="mosOption"][value="${score}"]`);
   if (input) {
@@ -490,15 +518,15 @@ function collectScreeningPayload() {
   };
 }
 
-async function saveCurrentScreeningBeforePageChange() {
-  if (!isScreeningStage() || !state.items.length) return true;
+async function saveCurrentStageBeforePageChange() {
+  if (!isRatePagingStage() || !state.items.length) return true;
   if (!state.username) {
     showToast("请先登录");
     return false;
   }
   let payload;
   try {
-    payload = collectScreeningPayload();
+    payload = collectCurrentStagePayload();
   } catch (error) {
     showToast(error.message);
     return false;
@@ -513,14 +541,28 @@ async function saveCurrentScreeningBeforePageChange() {
   return true;
 }
 
+async function reloadCurrentStageAfterSave(preferredIndex) {
+  const taskId = state.activeTask?.id || state.taskId;
+  const stage = state.stage;
+  await loadTasks();
+  state.activeTask = taskById(taskId);
+  const data = await api(`/api/tasks/${taskId}/items?stage=${stage}&username=${encodeURIComponent(state.username)}`);
+  state.items = data.items || [];
+  state.index = Math.max(0, Math.min(Math.max(0, state.items.length - 1), preferredIndex));
+  renderCurrentItem();
+}
+
 async function goToItem(nextIndex) {
   if (!state.items.length) return;
   const boundedIndex = Math.max(0, Math.min(state.items.length - 1, nextIndex));
-  if (boundedIndex === state.index) return;
-  if (!(await saveCurrentScreeningBeforePageChange())) return;
-  await loadTasks();
-  state.index = boundedIndex;
-  renderCurrentItem();
+  const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;
+  if (boundedIndex === state.index && !movingPastLastItem) return;
+  if (!(await saveCurrentStageBeforePageChange())) return;
+  const preferredIndex = nextIndex > state.index ? state.index : boundedIndex;
+  await reloadCurrentStageAfterSave(preferredIndex);
+  if (movingPastLastItem) {
+    showToast("已保存");
+  }
 }
 
 function goNextItem() {
@@ -528,13 +570,13 @@ function goNextItem() {
 }
 
 function handleRateShortcuts(event) {
-  if (!isScreeningStage() || event.repeat || isTextEditingShortcutTarget(event.target)) return;
-  if (/^[1-5]$/.test(event.key)) {
+  if (!isRatePagingStage() || event.repeat || isTextEditingShortcutTarget(event.target)) return;
+  if (isScreeningStage() && /^[1-5]$/.test(event.key)) {
     selectMosScore(event.key);
     event.preventDefault();
     return;
   }
-  if (event.key.toLowerCase() === "e") {
+  if (isScreeningStage() && event.key.toLowerCase() === "e") {
     setDefectValue(true);
     event.preventDefault();
     return;
@@ -552,22 +594,20 @@ async function saveStage(event) {
     return;
   }
   const item = state.items[state.index];
-  let payload;
-  if (state.stage === "label") {
-    payload = { username: state.username, labels: collectLabels() };
-  } else {
-    payload = collectScreeningPayload();
-  }
+  const payload = collectCurrentStagePayload();
   await api(`/api/tasks/${state.activeTask.id}/items/${item.item_index}/${state.stage}`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  const nextIndex = Math.min(state.index + 1, Math.max(0, state.items.length - 1));
   showToast("已保存");
-  await loadTasks();
-  await openStage(state.activeTask.id, state.stage);
-  state.index = Math.min(nextIndex, Math.max(0, state.items.length - 1));
-  renderCurrentItem();
+  await reloadCurrentStageAfterSave(state.index);
+}
+
+function collectCurrentStagePayload() {
+  if (state.stage === "label") {
+    return { username: state.username, labels: collectLabels() };
+  }
+  return collectScreeningPayload();
 }
 
 function collectLabels() {

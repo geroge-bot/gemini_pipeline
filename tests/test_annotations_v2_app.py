@@ -192,6 +192,123 @@ def test_v2_stage_gates_sampling_label_correction_and_export():
     assert rows[1]["rough"]["has_defect"] is True
 
 
+def test_v2_label_stage_exposes_auto_labels_as_editable_draft():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {
+                    "输入图": {"菜品种类": "中餐", "拍摄场景": "室内"},
+                    "输出图": {"美学评分": 4},
+                },
+            }
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "label draft",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"], ["输入图", "拍摄场景"], ["输出图", "美学评分"]],
+        }
+    )
+    store.save_rough(task["id"], 0, {"username": "rough", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+
+    item = store.list_stage_items(task["id"], "label")[0]
+
+    assert item["record"]["label_draft"]["labels"] == {
+        "输入图": {"菜品种类": "中餐", "拍摄场景": "室内"},
+        "输出图": {"美学评分": 4},
+    }
+    assert "label" not in item["record"]
+
+
+def test_v2_label_stage_draft_overlays_saved_corrections_on_auto_labels():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {
+                    "输入图": {"菜品种类": "中餐", "拍摄场景": "室内"},
+                    "输出图": {"美学评分": 4},
+                },
+            }
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "label draft overlay",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"], ["输入图", "拍摄场景"], ["输出图", "美学评分"]],
+        }
+    )
+    store.save_rough(task["id"], 0, {"username": "rough", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+    store.save_label(task["id"], 0, {"username": "labeler", "labels": {"输入图": {"菜品种类": "西餐"}}})
+
+    stored_task = store._require_task(task["id"])
+    item = store._read_items(stored_task)[0]
+    record = store._read_records(stored_task)["0"]
+    payload = store._item_payload(stored_task, item, record, stage="label")
+
+    assert payload["record"]["label"]["labels"] == {"输入图": {"菜品种类": "西餐"}}
+    assert payload["record"]["label_draft"]["labels"] == {
+        "输入图": {"菜品种类": "西餐", "拍摄场景": "室内"},
+        "输出图": {"美学评分": 4},
+    }
+
+
+def test_v2_label_stage_hides_items_that_already_have_saved_labels():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "hide labeled",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+    for item_index in range(2):
+        store.save_rough(task["id"], item_index, {"username": "rough", "mos": 5, "has_defect": False})
+        store.save_fine(task["id"], item_index, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+    store.save_label(task["id"], 0, {"username": "labeler", "labels": {"输入图": {"菜品种类": "中餐"}}})
+
+    label_items = store.list_stage_items(task["id"], "label")
+
+    assert [item["item_index"] for item in label_items] == [1]
+    assert store.summary(task["id"])["label_completed"] == 1
+
+
 def test_v2_sampling_buckets_support_selected_counts_and_select_all():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -959,6 +1076,25 @@ def test_v2_frontend_uses_progress_entries_login_gate_and_no_primary_issue_field
     assert 'otherIssueInput' not in script
 
 
+def test_v2_frontend_serializes_checked_label_choice_inputs():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'record.label_draft?.labels' in script
+    assert 'input.setAttribute("checked", "checked")' in script
+
+
+def test_v2_templates_bust_shared_app_js_cache_after_queue_changes():
+    template_dir = PROJECT_ROOT / "web" / "annotations_v2" / "templates"
+    expected_version = "app.js') }}?v=20260609-label-queue-refresh"
+
+    for template_name in ["index.html", "rate.html", "sample.html", "visualize.html"]:
+        template = (template_dir / template_name).read_text(encoding="utf-8")
+        assert expected_version in template
+        assert "20260609-label-choice-bars" not in template
+        assert "20260609-sample-page" not in template
+        assert "20260608-visualization" not in template
+
+
 def test_v2_screening_page_uses_three_column_rating_panel():
     rate_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "rate.html").read_text(encoding="utf-8")
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
@@ -997,6 +1133,43 @@ def test_v2_screening_page_exposes_keyboard_shortcuts():
     assert "isEditableShortcutTarget" not in script
 
 
+def test_v2_label_page_supports_space_paging_with_autosave():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "function isRatePagingStage()" in script
+    assert '["rough", "fine", "label"].includes(state.stage)' in script
+    assert "function collectCurrentStagePayload()" in script
+    assert 'if (state.stage === "label")' in script
+    assert "labels: collectLabels()" in script
+    assert "saveCurrentStageBeforePageChange" in script
+    assert "await saveCurrentStageBeforePageChange()" in script
+    assert "if (isScreeningStage() && /^[1-5]$/.test(event.key))" in script
+    assert 'if (event.code === "Space")' in script
+
+
+def test_v2_rate_paging_saves_forward_boundary_item_before_returning():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;" in script
+    assert "if (boundedIndex === state.index && !movingPastLastItem) return;" in script
+    assert "if (!(await saveCurrentStageBeforePageChange())) return;" in script
+    assert "const preferredIndex = nextIndex > state.index ? state.index : boundedIndex;" in script
+    assert "await reloadCurrentStageAfterSave(preferredIndex);" in script
+    assert "if (movingPastLastItem) {" in script
+
+
+def test_v2_save_button_refreshes_queue_without_skipping_or_wrapping():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    save_stage_start = script.index("async function saveStage")
+    collect_payload_start = script.index("function collectCurrentStagePayload", save_stage_start)
+    save_stage_body = script[save_stage_start:collect_payload_start]
+
+    assert "function reloadCurrentStageAfterSave(preferredIndex)" in script
+    assert "await reloadCurrentStageAfterSave(state.index);" in save_stage_body
+    assert "const nextIndex = Math.min(state.index + 1" not in save_stage_body
+    assert "await openStage(state.activeTask.id, state.stage);" not in save_stage_body
+
+
 def test_v2_screening_auto_saves_when_paging_instead_of_save_buttons():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
@@ -1007,7 +1180,7 @@ def test_v2_screening_auto_saves_when_paging_instead_of_save_buttons():
 
     assert "保存粗筛" not in screening_render
     assert "保存精筛" not in screening_render
-    assert "saveCurrentScreeningBeforePageChange" in script
+    assert "saveCurrentStageBeforePageChange" in script
     assert "goToItem(state.index + 1)" in script
 
 
@@ -1023,7 +1196,7 @@ def test_v2_frontend_supports_multi_annotator_assignment_and_round_progress():
     assert "第 ${round.round} 人" in script
     assert "username=${encodeURIComponent(state.username)}" in script
     assert "goToItem(state.index - 1)" in script
-    assert "await saveCurrentScreeningBeforePageChange()" in script
+    assert "await saveCurrentStageBeforePageChange()" in script
     assert "请选择 MOS 分后再翻页" in script
 
 
