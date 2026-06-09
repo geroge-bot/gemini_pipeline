@@ -9,6 +9,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -22,6 +23,7 @@ from web.annotations.label_options import LABEL_OPTION_GROUPS
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_STATE_PATH = APP_DIR / "data" / "state.json"
 IMAGE_PREVIEW_MAX_EDGE = 1024
+PREVIEW_CACHE_WORKERS = 16
 STATE_PATH_ENV = "ANNOTATIONS_V2_STATE_PATH"
 DATA_DIR_ENV = "ANNOTATIONS_V2_DATA_DIR"
 PREVIEW_CACHE_DIR_ENV = "ANNOTATIONS_V2_PREVIEW_CACHE_DIR"
@@ -919,6 +921,70 @@ class AnnotationV2Store:
     def list_tasks(self) -> list[dict[str, Any]]:
         return [self._task_payload(task) for task in self._read_state().get("tasks", [])]
 
+    def warm_preview_cache(self, task_id: str, progress_callback=None) -> dict[str, Any]:
+        task = deepcopy(self._require_task(task_id))
+        items = self._read_items(task)
+        image_jobs = [(item, "src", "src_image") for item in items] + [
+            (item, "dst", "dst_image") for item in items
+        ]
+        total = len(image_jobs)
+        cache_dir = self.preview_cache_dir(task_id)
+        result = {
+            "total": total,
+            "processed_count": 0,
+            "generated_count": 0,
+            "skipped_count": 0,
+            "failed_count": 0,
+            "failures": [],
+        }
+        if total == 0:
+            if progress_callback:
+                progress_callback(100, "没有图片需要缓存")
+            return result
+
+        def warm_one(item: dict[str, Any], field: str) -> str:
+            raw_path = Path(str(item[field]))
+            image_path = raw_path if raw_path.is_absolute() else Path(task["root_dir"]) / raw_path
+            if not image_path.exists() or not image_path.is_file():
+                raise FileNotFoundError(str(image_path))
+
+            cache_key = preview_cache_key(image_path)
+            had_cached_preview = cached_preview_path(cache_dir, cache_key) is not None
+            preview_path, _ = resized_image_file(image_path, cache_dir)
+            return "skipped" if had_cached_preview or preview_path.resolve() == image_path.resolve() else "generated"
+
+        with ThreadPoolExecutor(max_workers=PREVIEW_CACHE_WORKERS) as executor:
+            futures = {
+                executor.submit(warm_one, item, field): (item.get("item_index"), kind)
+                for item, kind, field in image_jobs
+            }
+            for future in as_completed(futures):
+                item_index, kind = futures[future]
+                try:
+                    status = future.result()
+                    if status == "skipped":
+                        result["skipped_count"] += 1
+                    else:
+                        result["generated_count"] += 1
+                except Exception as exc:  # noqa: BLE001 - keep warming the rest of the task
+                    result["failed_count"] += 1
+                    result["failures"].append(
+                        {
+                            "item_index": item_index,
+                            "kind": kind,
+                            "error": str(exc),
+                        }
+                    )
+                finally:
+                    result["processed_count"] += 1
+                    if progress_callback:
+                        percent = round((result["processed_count"] / total) * 100)
+                        progress_callback(percent, f"正在缓存图片 {result['processed_count']} / {total}")
+
+        if progress_callback:
+            progress_callback(100, "图片缓存完成")
+        return result
+
     def delete_task(self, task_id: str) -> dict[str, Any]:
         state = self._read_state()
         tasks = state.get("tasks", [])
@@ -1651,7 +1717,59 @@ class AnnotationV2Store:
         return raw_path if raw_path.is_absolute() else Path(task["root_dir"]) / raw_path
 
 
+class PreviewCacheJobs:
+    def __init__(self, store: AnnotationV2Store):
+        self.store = store
+        self._lock = threading.RLock()
+        self._jobs: dict[str, dict[str, Any]] = {}
+
+    def start(self, task_id: str) -> dict[str, Any]:
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "task_id": task_id,
+            "status": "running",
+            "progress": 0,
+            "message": "waiting to start",
+            "result": None,
+            "error": None,
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+
+        thread = threading.Thread(target=self._run, args=(job_id, task_id), daemon=True)
+        thread.start()
+        return deepcopy(job)
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return deepcopy(job) if job else None
+
+    def _update(self, job_id: str, **updates: Any) -> None:
+        with self._lock:
+            if job_id in self._jobs:
+                self._jobs[job_id].update(updates)
+
+    def _run(self, job_id: str, task_id: str) -> None:
+        def progress(percent: int, message: str) -> None:
+            self._update(job_id, progress=max(0, min(100, int(percent))), message=message)
+
+        try:
+            result = self.store.warm_preview_cache(task_id, progress_callback=progress)
+            self._update(
+                job_id,
+                status="completed",
+                progress=100,
+                message="图片缓存完成",
+                result=result,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced through job status for the UI
+            self._update(job_id, status="failed", error=str(exc), message=str(exc))
+
+
 store = AnnotationV2Store()
+preview_cache_jobs = PreviewCacheJobs(store)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.json.ensure_ascii = False
 
@@ -1705,6 +1823,22 @@ def api_create_task():
 @app.patch("/api/tasks/<task_id>")
 def api_update_task(task_id: str):
     return jsonify({"task": store.update_task(task_id, request.get_json(force=True) or {})})
+
+
+@app.post("/api/tasks/<task_id>/preview-cache/jobs")
+def api_start_preview_cache_job(task_id: str):
+    store._require_task(task_id)
+    preview_cache_jobs.store = store
+    job = preview_cache_jobs.start(task_id)
+    return jsonify({"job": job}), 202
+
+
+@app.get("/api/tasks/<task_id>/preview-cache/jobs/<job_id>")
+def api_get_preview_cache_job(task_id: str, job_id: str):
+    job = preview_cache_jobs.get(job_id)
+    if job is None or job.get("task_id") != task_id:
+        return jsonify({"error": "preview cache job not found"}), 404
+    return jsonify({"job": job})
 
 
 @app.delete("/api/tasks/<task_id>")

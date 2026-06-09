@@ -246,6 +246,7 @@ function renderTasks() {
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=label`}">标签结果</a>
         <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
         <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
+        <button class="ghost" data-action="cache-previews" data-id="${task.id}" type="button">缓存图片</button>
         <a class="buttonLike ghost" href="/api/tasks/${task.id}/download">导出</a>
         ${deleteTaskButton(task)}
       </div>
@@ -320,6 +321,40 @@ async function createTask(event) {
   $("fineAnnotatorCountInput").value = 1;
   showToast("任务已创建");
   await loadTasks();
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function warmPreviewCache(taskId, button) {
+  const originalText = button?.textContent || "缓存图片";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "缓存中 0%";
+  }
+  try {
+    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs`, { method: "POST" });
+    const job = await waitForPreviewCacheJob(taskId, data.job.id, button);
+    const result = job.result || {};
+    showToast(`图片缓存完成：生成 ${result.generated_count || 0}，跳过 ${result.skipped_count || 0}，失败 ${result.failed_count || 0}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function waitForPreviewCacheJob(taskId, jobId, button) {
+  while (true) {
+    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs/${jobId}`);
+    const job = data.job;
+    if (button) {
+      button.textContent = `缓存中 ${job.progress || 0}%`;
+    }
+    if (job.status === "completed") return job;
+    if (job.status === "failed") throw new Error(job.error || "图片缓存失败");
+    await sleep(350);
+  }
 }
 
 async function importTaskAnnotations(taskId) {
@@ -1407,6 +1442,7 @@ function bindEvents() {
     if (!action || !taskId) return;
     if (action === "edit") openEditTaskDialog(taskId);
     if (action === "import") importTaskAnnotations(taskId).catch((error) => showToast(error.message));
+    if (action === "cache-previews") warmPreviewCache(taskId, target).catch((error) => showToast(error.message));
     if (action === "delete") deleteTask(taskId, target.dataset.name || "").catch((error) => showToast(error.message));
   });
   $("editTaskForm")?.addEventListener("submit", (event) => saveTaskEdits(event).catch((error) => showToast(error.message)));

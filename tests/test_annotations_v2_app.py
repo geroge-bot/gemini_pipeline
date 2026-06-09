@@ -1,5 +1,8 @@
 import json
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor as RealThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -216,6 +219,112 @@ def test_v2_image_endpoint_caches_resized_preview_in_configured_dir():
         assert not (Path(task["data_dir"]) / "preview_cache").exists()
     finally:
         annotations_v2_app.store = old_store
+
+
+def test_v2_preview_cache_job_generates_all_resized_image_previews():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "0.jpg", (1400, 800))
+    make_test_image(tmp_path / "src" / "1.jpg", (1200, 900))
+    make_test_image(tmp_path / "dst" / "0.jpg", (1600, 900))
+    make_test_image(tmp_path / "dst" / "1.jpg", (1300, 1100))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/0.jpg", "dst_image": "dst/0.jpg"},
+            {"src_image": "src/1.jpg", "dst_image": "dst/1.jpg"},
+        ],
+    )
+
+    old_store = annotations_v2_app.store
+    old_jobs = annotations_v2_app.preview_cache_jobs
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    annotations_v2_app.preview_cache_jobs = PreviewCacheJobs(annotations_v2_app.store)
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        client = annotations_v2_app.app.test_client()
+
+        start_response = client.post(f"/api/tasks/{task['id']}/preview-cache/jobs")
+
+        assert start_response.status_code == 202
+        job_id = start_response.get_json()["job"]["id"]
+        for _ in range(50):
+            job_response = client.get(f"/api/tasks/{task['id']}/preview-cache/jobs/{job_id}")
+            job = job_response.get_json()["job"]
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("preview cache job did not complete")
+
+        assert job["progress"] == 100
+        assert job["result"]["total"] == 4
+        assert job["result"]["generated_count"] == 4
+        assert job["result"]["failed_count"] == 0
+        assert len(list((preview_cache_root / task["id"]).glob("*.jpg"))) == 4
+        assert not (Path(task["data_dir"]) / "preview_cache").exists()
+    finally:
+        annotations_v2_app.preview_cache_jobs = old_jobs
+        annotations_v2_app.store = old_store
+
+
+def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    rows = []
+    for index in range(8):
+        make_test_image(tmp_path / "src" / f"{index}.jpg", (1200, 800))
+        make_test_image(tmp_path / "dst" / f"{index}.jpg", (1200, 800))
+        rows.append({"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"})
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, rows)
+
+    worker_counts = []
+
+    class CapturingThreadPoolExecutor(RealThreadPoolExecutor):
+        def __init__(self, *args, **kwargs):
+            if "max_workers" in kwargs:
+                worker_counts.append(kwargs["max_workers"])
+            elif args:
+                worker_counts.append(args[0])
+            super().__init__(*args, **kwargs)
+
+    active_count = 0
+    max_active_count = 0
+    lock = threading.Lock()
+
+    def fake_resized_image_file(path, cache_dir, max_edge=1024):
+        nonlocal active_count, max_active_count
+        with lock:
+            active_count += 1
+            max_active_count = max(max_active_count, active_count)
+        try:
+            time.sleep(0.03)
+            return Path(path).resolve(), "image/jpeg"
+        finally:
+            with lock:
+                active_count -= 1
+
+    monkeypatch.setattr(annotations_v2_app, "ThreadPoolExecutor", CapturingThreadPoolExecutor, raising=False)
+    monkeypatch.setattr(annotations_v2_app, "resized_image_file", fake_resized_image_file)
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    result = store.warm_preview_cache(task["id"])
+
+    assert worker_counts == [16]
+    assert max_active_count > 1
+    assert result["total"] == 16
+    assert result["processed_count"] == 16
+    assert result["failed_count"] == 0
 
 
 def test_v2_task_creation_removes_non_canonical_ai_label_fields():
@@ -1771,6 +1880,17 @@ def test_v2_frontend_exposes_annotation_import_action():
     assert "导入 JSONL 文件路径" in script
     assert 'api(`/api/tasks/${taskId}/import`' in script
     assert 'if (action === "import") importTaskAnnotations(taskId)' in script
+
+
+def test_v2_frontend_exposes_preview_cache_action():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'data-action="cache-previews"' in script
+    assert "async function warmPreviewCache" in script
+    assert 'api(`/api/tasks/${taskId}/preview-cache/jobs`, { method: "POST" })' in script
+    assert 'api(`/api/tasks/${taskId}/preview-cache/jobs/${jobId}`)' in script
+    assert 'if (action === "cache-previews") warmPreviewCache(taskId, target)' in script
+    assert "缓存图片" in script
 
 
 def test_v2_frontend_drives_dedicated_sample_page():
