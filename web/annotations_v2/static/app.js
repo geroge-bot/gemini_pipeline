@@ -2,6 +2,7 @@ const state = {
   username: localStorage.getItem("annotations_v2.username") || "",
   page: document.body.dataset.page || "home",
   taskId: document.body.dataset.taskId || "",
+  editingTaskId: "",
   tasks: [],
   activeTask: null,
   stage: "rough",
@@ -138,6 +139,7 @@ function renderTasks() {
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=fine`}">精筛结果</a>
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=sample`}">采样结果</a>
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=label`}">标签结果</a>
+        <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
         <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
         <a class="buttonLike ghost" href="/api/tasks/${task.id}/download">导出</a>
         ${deleteTaskButton(task)}
@@ -234,6 +236,50 @@ async function deleteTask(taskId, taskName) {
     body: JSON.stringify({ username: state.username }),
   });
   showToast("任务已从列表移除");
+  await loadTasks();
+}
+
+function taskIssueOptionsText(task) {
+  return (task?.rough?.issue_options || []).join("\n");
+}
+
+function taskLabelPathsText(task) {
+  return (task?.selected_label_paths || []).map((path) => (path || []).join("/")).join("\n");
+}
+
+function openEditTaskDialog(taskId) {
+  const task = taskById(taskId);
+  if (!task) {
+    showToast("任务不存在或尚未加载");
+    return;
+  }
+  state.editingTaskId = taskId;
+  $("editTaskTitle").textContent = `编辑任务：${task.name || taskId}`;
+  $("editIssueOptionsInput").value = taskIssueOptionsText(task);
+  $("editLabelPathsInput").value = taskLabelPathsText(task);
+  $("taskEditOverlay").classList.remove("hidden");
+  $("taskEditDialog").classList.remove("hidden");
+  $("editIssueOptionsInput").focus();
+}
+
+function closeEditTaskDialog() {
+  state.editingTaskId = "";
+  $("taskEditOverlay")?.classList.add("hidden");
+  $("taskEditDialog")?.classList.add("hidden");
+}
+
+async function saveTaskEdits(event) {
+  event.preventDefault();
+  if (!state.editingTaskId) return;
+  await api(`/api/tasks/${state.editingTaskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      rough: { issue_options: parseList($("editIssueOptionsInput").value) },
+      selected_label_paths: parseLabelPaths($("editLabelPathsInput").value),
+    }),
+  });
+  closeEditTaskDialog();
+  showToast("任务已更新");
   await loadTasks();
 }
 
@@ -1137,9 +1183,14 @@ function bindEvents() {
     const action = target?.dataset.action;
     const taskId = target?.dataset.id;
     if (!action || !taskId) return;
+    if (action === "edit") openEditTaskDialog(taskId);
     if (action === "import") importTaskAnnotations(taskId).catch((error) => showToast(error.message));
     if (action === "delete") deleteTask(taskId, target.dataset.name || "").catch((error) => showToast(error.message));
   });
+  $("editTaskForm")?.addEventListener("submit", (event) => saveTaskEdits(event).catch((error) => showToast(error.message)));
+  $("taskEditOverlay")?.addEventListener("click", () => closeEditTaskDialog());
+  $("closeEditTaskBtn")?.addEventListener("click", () => closeEditTaskDialog());
+  $("cancelEditTaskBtn")?.addEventListener("click", () => closeEditTaskDialog());
   $("stageForm")?.addEventListener("submit", (event) => saveStage(event).catch((error) => showToast(error.message)));
   $("prevBtn")?.addEventListener("click", () => goToItem(state.index - 1).catch((error) => showToast(error.message)));
   $("nextBtn")?.addEventListener("click", () => {

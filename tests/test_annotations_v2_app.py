@@ -113,6 +113,41 @@ def test_v2_task_payload_exposes_standard_label_choice_options():
     assert "中餐" in task["label_option_groups"][0]["dimensions"][1]["options"]
 
 
+def test_v2_update_task_properties_persists_issue_options_and_label_paths():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "editable task",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+            "rough": {"issue_options": ["主体问题"], "min_mos": 4},
+            "fine": {"min_mos": 4},
+        }
+    )
+
+    updated = store.update_task(
+        task["id"],
+        {
+            "rough": {"issue_options": "构图问题\n颜色问题"},
+            "selected_label_paths": "输出图/景别, 输入图/拍摄场景",
+        },
+    )
+
+    assert updated["rough"]["issue_options"] == ["构图问题", "颜色问题"]
+    assert updated["rough"]["min_mos"] == 4
+    assert updated["selected_label_paths"] == [["输出图", "景别"], ["输入图", "拍摄场景"]]
+    persisted = AnnotationV2Store(tmp_path / "state.json").list_tasks()[0]
+    assert persisted["rough"]["issue_options"] == ["构图问题", "颜色问题"]
+    assert persisted["selected_label_paths"] == [["输出图", "景别"], ["输入图", "拍摄场景"]]
+
+
 def test_v2_delete_task_only_unregisters_task_and_preserves_data_dir():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -953,6 +988,61 @@ def test_v2_api_exposes_summary_and_stage_endpoints():
         annotations_v2_app.store = old_store
 
 
+def test_v2_update_task_api_refreshes_stage_configuration():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {
+                    "输入图": {"菜品种类": "中餐"},
+                    "输出图": {"景别": "近景"},
+                },
+            }
+        ],
+    )
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        client = annotations_v2_app.app.test_client()
+        task = annotations_v2_app.store.create_task(
+            {
+                "name": "api editable",
+                "root_dir": str(tmp_path),
+                "jsonl_path": str(jsonl_path),
+                "selected_label_paths": [["输入图", "菜品种类"]],
+                "rough": {"issue_options": ["主体问题"]},
+            }
+        )
+
+        response = client.patch(
+            f"/api/tasks/{task['id']}",
+            json={
+                "issue_options": ["颜色问题"],
+                "selected_label_paths": [["输出图", "景别"]],
+            },
+        )
+        annotations_v2_app.store.save_rough(task["id"], 0, {"username": "rough", "mos": 5, "has_defect": False})
+        annotations_v2_app.store.save_fine(task["id"], 0, {"username": "fine", "mos": 5, "has_defect": False})
+        annotations_v2_app.store.sample(task["id"], {"select_all": True})
+        label_response = client.get(f"/api/tasks/{task['id']}/items?stage=label")
+
+        assert response.status_code == 200
+        updated_task = response.get_json()["task"]
+        assert updated_task["rough"]["issue_options"] == ["颜色问题"]
+        assert updated_task["selected_label_paths"] == [["输出图", "景别"]]
+        assert label_response.get_json()["items"][0]["record"]["label_draft"]["labels"] == {"输出图": {"景别": "近景"}}
+    finally:
+        annotations_v2_app.store = old_store
+
+
 def test_v2_delete_task_api_requires_admin_username_and_unregisters_only():
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
@@ -1076,6 +1166,26 @@ def test_v2_frontend_uses_progress_entries_login_gate_and_no_primary_issue_field
     assert 'otherIssueInput' not in script
 
 
+def test_v2_frontend_exposes_task_edit_dialog_for_issue_and_label_paths():
+    index_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    styles = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="taskEditOverlay"' in index_template
+    assert 'id="editTaskForm"' in index_template
+    assert 'id="editIssueOptionsInput"' in index_template
+    assert 'id="editLabelPathsInput"' in index_template
+    assert 'data-action="edit"' in script
+    assert "openEditTaskDialog(taskId)" in script
+    assert "taskIssueOptionsText(task)" in script
+    assert "taskLabelPathsText(task)" in script
+    assert 'method: "PATCH"' in script
+    assert 'rough: { issue_options: parseList($("editIssueOptionsInput").value) }' in script
+    assert 'selected_label_paths: parseLabelPaths($("editLabelPathsInput").value)' in script
+    assert ".modalOverlay" in styles
+    assert ".modalPanel" in styles
+
+
 def test_v2_frontend_serializes_checked_label_choice_inputs():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
@@ -1085,11 +1195,12 @@ def test_v2_frontend_serializes_checked_label_choice_inputs():
 
 def test_v2_templates_bust_shared_app_js_cache_after_queue_changes():
     template_dir = PROJECT_ROOT / "web" / "annotations_v2" / "templates"
-    expected_version = "app.js') }}?v=20260609-label-queue-refresh"
+    expected_version = "app.js') }}?v=20260609-task-editing"
 
     for template_name in ["index.html", "rate.html", "sample.html", "visualize.html"]:
         template = (template_dir / template_name).read_text(encoding="utf-8")
         assert expected_version in template
+        assert "20260609-label-queue-refresh" not in template
         assert "20260609-label-choice-bars" not in template
         assert "20260609-sample-page" not in template
         assert "20260608-visualization" not in template
