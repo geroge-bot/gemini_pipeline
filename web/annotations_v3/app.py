@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import Flask, jsonify, request
 
+from web.annotations_v3 import assets
 from web.annotations_v3 import assignments
 from web.annotations_v3 import datasets
 from web.annotations_v3 import records
@@ -81,6 +82,37 @@ def create_app() -> Flask:
             return jsonify({"error": str(exc), "code": exc.code}), 400
         except FileNotFoundError:
             return jsonify({"error": "dataset or item not found"}), 404
+
+    @app.post("/api/datasets/<dataset_id>/assets/jobs")
+    def api_create_asset_job(dataset_id: str):
+        payload = request.get_json(silent=True) or {}
+        return jsonify(assets.create_asset_job(dataset_id, payload.get("item_ids")))
+
+    @app.get("/api/datasets/<dataset_id>/assets/jobs/<job_id>")
+    def api_get_asset_job(dataset_id: str, job_id: str):
+        try:
+            return jsonify(assets.get_asset_job(dataset_id, job_id))
+        except FileNotFoundError:
+            return jsonify({"error": "job not found"}), 404
+
+    @app.get("/api/datasets/<dataset_id>/assets/manifest")
+    def api_asset_manifest(dataset_id: str):
+        raw_item_ids = request.args.get("item_ids")
+        if raw_item_ids:
+            return jsonify(assets.manifest_for_items(dataset_id, [value for value in raw_item_ids.split(",") if value]))
+        return jsonify(assets.load_manifest(dataset_id))
+
+    @app.get("/api/datasets/<dataset_id>/assets/<asset_id>")
+    def api_get_asset(dataset_id: str, asset_id: str):
+        try:
+            return assets.serve_asset(
+                dataset_id,
+                asset_id,
+                request.headers.get("Range"),
+                request.headers.get("If-None-Match"),
+            )
+        except FileNotFoundError:
+            return jsonify({"error": "asset not found"}), 404
 
     return app
 

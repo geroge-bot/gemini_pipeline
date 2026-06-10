@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any
 
-from web.annotations_v3 import datasets, storage
+from web.annotations_v3 import assets, datasets, storage
 from web.annotations_v3 import records
 
 
@@ -187,7 +187,7 @@ def assignment_response(dataset_id: str, assignment: dict[str, Any]) -> dict[str
     for item_id in assignment["item_ids"]:
         item = dict(items_by_id[item_id])
         item["order_rank"] = ranks[item_id]
-        item["image_assets"] = {"src": {"status": "missing"}, "dst": {"status": "missing"}}
+        item["image_assets"] = assets.asset_entry_for_item(dataset_id, item_id)
         item["annotation_context"] = records.annotation_context(
             dataset_id,
             item_id,
