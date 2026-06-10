@@ -616,6 +616,18 @@ def test_v2_task_payload_exposes_standard_label_choice_options():
     assert "中餐" in task["label_option_groups"][0]["dimensions"][1]["options"]
 
 
+def test_v2_all_standard_label_dimensions_expose_options():
+    from web.annotations.label_options import LABEL_OPTION_GROUPS
+
+    missing_options = []
+    for group in LABEL_OPTION_GROUPS:
+        for dimension in group.get("dimensions", []):
+            if not isinstance(dimension.get("options"), list):
+                missing_options.append(f"{group.get('name')}/{dimension.get('name')}")
+
+    assert missing_options == []
+
+
 def test_v2_update_task_properties_persists_issue_options_and_label_paths():
     from web.annotations_v2.app import AnnotationV2Store
 
