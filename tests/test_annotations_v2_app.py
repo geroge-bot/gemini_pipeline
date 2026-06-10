@@ -68,6 +68,58 @@ def test_v2_json_file_writes_are_safe_when_concurrent(monkeypatch):
     assert json.loads(path.read_text(encoding="utf-8")) in [{"writer": "alice"}, {"writer": "bob"}]
 
 
+def test_v2_screening_record_updates_are_safe_when_concurrent(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    original_read_records = store._read_records
+    read_barrier = threading.Barrier(2)
+    guarded_read_count = 0
+    read_count_lock = threading.Lock()
+
+    records_lock = None
+
+    def synchronized_read_records(task_payload):
+        nonlocal guarded_read_count
+        records = original_read_records(task_payload)
+        if records_lock is not None and getattr(records_lock, "_is_owned", lambda: False)():
+            return records
+        with read_count_lock:
+            guarded_read_count += 1
+            read_count = guarded_read_count
+        if read_count <= 2:
+            read_barrier.wait(timeout=5)
+        return records
+
+    monkeypatch.setattr(store, "_read_records", synchronized_read_records)
+    from web.annotations_v2.app import json_write_lock
+    records_lock = json_write_lock(store._records_path(store._require_task(task["id"])))
+
+    with RealThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(store.save_rough, task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False}),
+            executor.submit(store.save_rough, task["id"], 1, {"username": "bob", "mos": 4, "has_defect": False}),
+        ]
+        for future in futures:
+            future.result(timeout=5)
+
+    records = original_read_records(store._require_task(task["id"]))
+
+    assert set(records) == {"0", "1"}
+    assert records["0"]["rough"]["username"] == "alice"
+    assert records["1"]["rough"]["username"] == "bob"
+
+
 def make_test_image(path, size):
     from PIL import Image
 
@@ -460,6 +512,49 @@ def test_v2_preview_cache_job_reuses_running_task_job(monkeypatch):
     assert second["id"] == first["id"]
 
 
+def test_v2_preview_cache_job_reuses_job_when_started_concurrently(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "a.jpg", (1200, 800))
+    make_test_image(tmp_path / "dst" / "a.jpg", (1200, 800))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    jobs = PreviewCacheJobs(store)
+    uuid_barrier = threading.Barrier(2)
+    uuid_lock = threading.Lock()
+    uuid_count = 0
+    release_job = threading.Event()
+
+    def slow_warm_preview_cache(task_id, progress_callback=None):
+        release_job.wait(timeout=2)
+        return {"total": 0, "processed_count": 0, "generated_count": 0, "skipped_count": 0, "failed_count": 0, "failures": []}
+
+    def synchronized_uuid4():
+        nonlocal uuid_count
+        uuid_barrier.wait(timeout=5)
+        with uuid_lock:
+            uuid_count += 1
+            return f"job-{uuid_count}"
+
+    monkeypatch.setattr(store, "warm_preview_cache", slow_warm_preview_cache)
+    monkeypatch.setattr(annotations_v2_app.uuid, "uuid4", synchronized_uuid4)
+
+    try:
+        with RealThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(jobs.start, task["id"]) for _ in range(2)]
+            started_jobs = [future.result(timeout=5) for future in futures]
+
+        assert started_jobs[0]["id"] == started_jobs[1]["id"]
+        assert len(jobs._jobs) == 1
+    finally:
+        release_job.set()
+
+
 def test_v2_task_creation_removes_non_canonical_ai_label_fields():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -717,6 +812,55 @@ def test_v2_label_stage_draft_overlays_saved_corrections_on_auto_labels():
         "输入图": {"菜品种类": "西餐", "拍摄场景": "室内"},
         "输出图": {"美学评分": 4},
     }
+
+
+def test_v2_save_label_keeps_only_selected_standard_label_paths():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {
+                    "输入图": {"菜品种类": "中餐", "拍摄场景": "室内"},
+                    "输出图": {"美学评分": 4},
+                },
+            }
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+    store.save_rough(task["id"], 0, {"username": "rough", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+
+    saved = store.save_label(
+        task["id"],
+        0,
+        {
+            "username": "labeler",
+            "labels": {
+                "输入图": {
+                    "菜品种类": "融合菜",
+                    "拍摄场景": "室外",
+                    "景别_v2": "污染字段",
+                },
+                "输出图": {"美学评分": 5},
+            },
+        },
+    )
+
+    assert saved["labels"] == {"输入图": {"菜品种类": "融合菜"}}
 
 
 def test_v2_label_stage_hides_items_that_already_have_saved_labels():

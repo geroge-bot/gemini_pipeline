@@ -282,6 +282,20 @@ def nested_set(target: dict[str, Any], path: list[str], value: Any) -> None:
         cursor[path[-1]] = value
 
 
+def selected_sanitized_labels(labels: dict[str, Any], selected_paths: Any) -> dict[str, Any]:
+    cleaned = sanitize_labels(labels)
+    paths = normalize_label_paths(selected_paths)
+    if not paths:
+        return cleaned
+    selected: dict[str, Any] = {}
+    for path in paths:
+        normalized_path = [str(part) for part in path]
+        value = nested_get(cleaned, normalized_path)
+        if value not in (None, ""):
+            nested_set(selected, normalized_path, deepcopy(value))
+    return selected
+
+
 def nested_overlay(target: dict[str, Any], source: dict[str, Any]) -> None:
     for key, value in source.items():
         if isinstance(value, dict):
@@ -604,6 +618,14 @@ class AnnotationV2Store:
 
     def _write_records(self, task: dict[str, Any], records: dict[str, Any]) -> None:
         write_json_file(self._records_path(task), records)
+
+    def _update_records(self, task: dict[str, Any], mutate) -> Any:
+        records_path = self._records_path(task)
+        with json_write_lock(records_path):
+            records = self._read_records(task)
+            result = mutate(records)
+            self._write_records(task, records)
+            return result
 
     def _stage_target(self, task: dict[str, Any], stage: str) -> int:
         return clean_positive_int(task.get(stage, {}).get("annotator_count"), 1)
@@ -1429,29 +1451,30 @@ class AnnotationV2Store:
     def save_rough(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
-        records = self._read_records(task)
-        item_record = records.setdefault(str(int(item_index)), {})
-        record = self._upsert_screen_annotation(task, item_record, "rough", payload)
-        self._write_records(task, records)
-        return record
+
+        def mutate(records: dict[str, Any]) -> dict[str, Any]:
+            item_record = records.setdefault(str(int(item_index)), {})
+            return self._upsert_screen_annotation(task, item_record, "rough", payload)
+
+        return self._update_records(task, mutate)
 
     def save_fine(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
-        records = self._read_records(task)
-        item_record = records.setdefault(str(int(item_index)), {})
-        if not self._stage_complete(task, item_record, "rough") or not self._rough_passes(task, item_record.get("rough")):
-            raise ValueError("精筛前必须先通过粗筛")
-        record = self._upsert_screen_annotation(task, item_record, "fine", payload)
-        self._write_records(task, records)
-        return record
+
+        def mutate(records: dict[str, Any]) -> dict[str, Any]:
+            item_record = records.setdefault(str(int(item_index)), {})
+            if not self._stage_complete(task, item_record, "rough") or not self._rough_passes(task, item_record.get("rough")):
+                raise ValueError("精筛前必须先通过粗筛")
+            return self._upsert_screen_annotation(task, item_record, "fine", payload)
+
+        return self._update_records(task, mutate)
 
     def save_label(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
-        records_path = self._records_path(task)
-        with json_write_lock(records_path):
-            records = self._read_records(task)
+
+        def mutate(records: dict[str, Any]) -> dict[str, Any]:
             item_record = records.setdefault(str(int(item_index)), {})
             if not item_record.get("sampled"):
                 raise ValueError("标签纠错前必须先采样")
@@ -1464,14 +1487,16 @@ class AnnotationV2Store:
             labels = payload.get("labels")
             if not isinstance(labels, dict):
                 raise ValueError("labels must be an object")
+            labels = selected_sanitized_labels(labels, task.get("selected_label_paths"))
             item_record["label"] = {
                 "username": username,
-                "labels": deepcopy(labels),
+                "labels": labels,
                 "updated_at": utc_now(),
             }
             item_record.pop("label_claim", None)
-            self._write_records(task, records)
             return deepcopy(item_record["label"])
+
+        return self._update_records(task, mutate)
 
     def _screen_record(self, payload: dict[str, Any], allow_empty_issue: bool) -> dict[str, Any]:
         username = normalized_import_username(payload)
@@ -1625,39 +1650,42 @@ class AnnotationV2Store:
     def sample(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         items = self._read_items(task)
-        records = self._read_records(task)
-        candidates = self._sample_candidates(task, items, records)
-        buckets = self._sample_bucket_map(task, candidates)
 
-        for record in records.values():
-            if isinstance(record, dict):
-                record.pop("sampled", None)
-                record.pop("sample_bucket", None)
+        def mutate(records: dict[str, Any]) -> dict[str, Any]:
+            candidates = self._sample_candidates(task, items, records)
+            buckets = self._sample_bucket_map(task, candidates)
 
-        selected = self._selected_sample_items(payload, buckets)
-        for item in selected:
-            key = str(item["item_index"])
-            bucket_name = self._sample_bucket(task, item)
-            records.setdefault(key, {})["sampled"] = True
-            records[key]["sample_bucket"] = bucket_name
+            for record in records.values():
+                if isinstance(record, dict):
+                    record.pop("sampled", None)
+                    record.pop("sample_bucket", None)
 
-        self._write_records(task, records)
-        selected_indexes = {item["item_index"] for item in selected}
-        bucket_summary = [
-            {
-                "bucket": bucket_name,
-                "candidate_count": len(buckets[bucket_name]),
-                "sampled_count": sum(1 for item in buckets[bucket_name] if item["item_index"] in selected_indexes),
+            selected = self._selected_sample_items(payload, buckets)
+            for item in selected:
+                key = str(item["item_index"])
+                bucket_name = self._sample_bucket(task, item)
+                records.setdefault(key, {})["sampled"] = True
+                records[key]["sample_bucket"] = bucket_name
+
+            selected_indexes = {item["item_index"] for item in selected}
+            bucket_summary = [
+                {
+                    "bucket": bucket_name,
+                    "candidate_count": len(buckets[bucket_name]),
+                    "sampled_count": sum(1 for item in buckets[bucket_name] if item["item_index"] in selected_indexes),
+                }
+                for bucket_name in sorted(buckets)
+                if any(item["item_index"] in selected_indexes for item in buckets[bucket_name])
+            ]
+            return {
+                "candidate_count": len(candidates),
+                "sampled_count": len(selected),
+                "buckets": bucket_summary,
             }
-            for bucket_name in sorted(buckets)
-            if any(item["item_index"] in selected_indexes for item in buckets[bucket_name])
-        ]
-        return {
-            "candidate_count": len(candidates),
-            "sampled_count": len(selected),
-            "buckets": bucket_summary,
-            "summary": self.summary(task_id),
-        }
+
+        result = self._update_records(task, mutate)
+        result["summary"] = self.summary(task_id)
+        return result
 
     def _sample_bucket(self, task: dict[str, Any], item: dict[str, Any]) -> str:
         paths = task.get("selected_label_paths") or []
@@ -1993,6 +2021,16 @@ class PreviewCacheJobs:
             "error": None,
         }
         with self._lock:
+            running_job = next(
+                (
+                    existing_job
+                    for existing_job in self._jobs.values()
+                    if existing_job.get("task_id") == task_id and existing_job.get("status") == "running"
+                ),
+                None,
+            )
+            if running_job:
+                return deepcopy(running_job)
             self._jobs[job_id] = job
 
         thread = threading.Thread(target=self._run, args=(job_id, task_id), daemon=True)
