@@ -658,6 +658,48 @@ def test_v2_label_stage_hides_items_that_already_have_saved_labels():
     assert store.summary(task["id"])["label_completed"] == 1
 
 
+def test_v2_label_stage_reserves_open_item_for_current_user():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+        ],
+    )
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task(
+            {
+                "name": "reserve labels",
+                "root_dir": str(tmp_path),
+                "jsonl_path": str(jsonl_path),
+                "selected_label_paths": [["输入图", "菜品种类"]],
+            }
+        )
+        for item_index in range(2):
+            annotations_v2_app.store.save_rough(task["id"], item_index, {"username": "rough", "mos": 5, "has_defect": False})
+            annotations_v2_app.store.save_fine(task["id"], item_index, {"username": "fine", "mos": 5, "has_defect": False})
+        annotations_v2_app.store.sample(task["id"], {"select_all": True})
+        client = annotations_v2_app.app.test_client()
+
+        alice_response = client.get(f"/api/tasks/{task['id']}/items?stage=label&username=alice&include_history=1")
+        bob_response = client.get(f"/api/tasks/{task['id']}/items?stage=label&username=bob&include_history=1")
+
+        assert alice_response.status_code == 200
+        assert bob_response.status_code == 200
+        assert alice_response.get_json()["items"][0]["item_index"] == 0
+        assert bob_response.get_json()["items"][0]["item_index"] == 1
+    finally:
+        annotations_v2_app.store = old_store
+
+
 def test_v2_sampling_buckets_support_selected_counts_and_select_all():
     from web.annotations_v2.app import AnnotationV2Store
 

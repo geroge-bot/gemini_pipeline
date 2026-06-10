@@ -31,6 +31,7 @@ INPUT_GROUP_NAME = "输入图"
 OUTPUT_GROUP_NAME = "输出图"
 VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
 TASK_DELETE_ADMIN_USERNAME = "孙本猿"
+LABEL_CLAIM_TTL_SECONDS = 30 * 60
 JSON_WRITE_LOCKS: dict[Path, threading.RLock] = {}
 JSON_WRITE_LOCKS_GUARD = threading.Lock()
 CANONICAL_LABEL_DIMENSIONS = {
@@ -858,6 +859,50 @@ class AnnotationV2Store:
             ),
         )
 
+    def _active_label_claim(
+        self,
+        record: dict[str, Any],
+        now: float | None = None,
+    ) -> dict[str, Any] | None:
+        claim = record.get("label_claim")
+        if not isinstance(claim, dict):
+            return None
+        username = str(claim.get("username") or "").strip()
+        if not username:
+            return None
+        try:
+            claimed_at = float(claim.get("claimed_at") or 0)
+        except (TypeError, ValueError):
+            return None
+        now = utc_now() if now is None else now
+        if claimed_at <= 0 or now - claimed_at > LABEL_CLAIM_TTL_SECONDS:
+            return None
+        return claim
+
+    def _clear_expired_label_claims(self, records: dict[str, Any], now: float | None = None) -> bool:
+        now = utc_now() if now is None else now
+        changed = False
+        for record in records.values():
+            if not isinstance(record, dict) or "label_claim" not in record:
+                continue
+            if self._active_label_claim(record, now) is None:
+                record.pop("label_claim", None)
+                changed = True
+        return changed
+
+    def _label_claimed_by_other(self, record: dict[str, Any], username: str, now: float | None = None) -> bool:
+        claim = self._active_label_claim(record, now)
+        return bool(claim and claim.get("username") != username)
+
+    def _has_active_label_claim_for_user(
+        self,
+        record: dict[str, Any],
+        username: str,
+        now: float | None = None,
+    ) -> bool:
+        claim = self._active_label_claim(record, now)
+        return bool(claim and claim.get("username") == username)
+
     def _read_item(self, task: dict[str, Any], item_index: int) -> dict[str, Any]:
         items = self._read_items(task)
         try:
@@ -1108,13 +1153,73 @@ class AnnotationV2Store:
         stage: str,
         username: str = "",
         include_history: bool = False,
+        reserve_open_label_item: bool = False,
     ) -> list[dict[str, Any]]:
         task = self._require_task(task_id)
-        records = self._read_records(task)
-        items = self._read_items(task)
         stage = str(stage or "rough")
         username = str(username or "").strip()
         include_history = bool(include_history and username)
+        if stage == "label" and reserve_open_label_item and username:
+            records_path = self._records_path(task)
+            with json_write_lock(records_path):
+                records = self._read_records(task)
+                items = self._read_items(task)
+                now = utc_now()
+                changed = self._clear_expired_label_claims(records, now)
+                if not any(
+                    self._has_active_label_claim_for_user(record, username, now)
+                    for record in records.values()
+                    if isinstance(record, dict) and not record.get("label")
+                ):
+                    candidates = self._list_stage_items_from_loaded(
+                        task,
+                        items,
+                        records,
+                        stage,
+                        username,
+                        include_history,
+                        now,
+                    )
+                    claim_candidate = next(
+                        (
+                            item
+                            for item in candidates
+                            if not (item.get("record") or {}).get("label")
+                            and not self._label_claimed_by_other(item.get("record") or {}, username, now)
+                        ),
+                        None,
+                    )
+                    if claim_candidate:
+                        item_record = records.setdefault(str(int(claim_candidate["item_index"])), {})
+                        item_record["label_claim"] = {"username": username, "claimed_at": now}
+                        changed = True
+                if changed:
+                    self._write_records(task, records)
+                return self._list_stage_items_from_loaded(
+                    task,
+                    items,
+                    records,
+                    stage,
+                    username,
+                    include_history,
+                    now,
+                )
+
+        records = self._read_records(task)
+        items = self._read_items(task)
+        now = utc_now()
+        return self._list_stage_items_from_loaded(task, items, records, stage, username, include_history, now)
+
+    def _list_stage_items_from_loaded(
+        self,
+        task: dict[str, Any],
+        items: list[dict[str, Any]],
+        records: dict[str, Any],
+        stage: str,
+        username: str,
+        include_history: bool,
+        now: float | None = None,
+    ) -> list[dict[str, Any]]:
         result = []
         for item in items:
             record = records.get(str(item["item_index"]), {})
@@ -1123,6 +1228,8 @@ class AnnotationV2Store:
             )
             label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
             has_user_label = bool(username and stage == "label" and label_record.get("username") == username)
+            if stage == "label" and username and not has_user_label and self._label_claimed_by_other(record, username, now):
+                continue
             if stage == "fine" and (
                 not self._stage_complete(task, record, "rough") or not self._rough_passes(task, record.get("rough"))
             ):
@@ -1142,11 +1249,29 @@ class AnnotationV2Store:
             result.append(self._item_payload(task, item, record, stage=stage, username=username))
         sorted_result = self._sort_allocated_items(result, records, stage, username)
         if include_history:
-            sorted_result = sorted(
-                sorted_result,
-                key=lambda item: 0 if self._payload_has_user_annotation(item, stage, username) else 1,
-            )
+            if stage == "label":
+                sorted_result = sorted(
+                    sorted_result,
+                    key=lambda item: (
+                        0
+                        if self._payload_has_user_label_claim(item, username, now)
+                        else 1
+                        if self._payload_has_user_annotation(item, stage, username)
+                        else 2
+                    ),
+                )
+            else:
+                sorted_result = sorted(
+                    sorted_result,
+                    key=lambda item: 0 if self._payload_has_user_annotation(item, stage, username) else 1,
+                )
         return sorted_result
+
+    def _payload_has_user_label_claim(self, item: dict[str, Any], username: str, now: float | None = None) -> bool:
+        if not username:
+            return False
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        return self._has_active_label_claim_for_user(record, username, now)
 
     def _payload_has_user_annotation(self, item: dict[str, Any], stage: str, username: str) -> bool:
         if not username:
@@ -1226,23 +1351,29 @@ class AnnotationV2Store:
     def save_label(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
-        records = self._read_records(task)
-        item_record = records.setdefault(str(int(item_index)), {})
-        if not item_record.get("sampled"):
-            raise ValueError("标签纠错前必须先采样")
-        username = str(payload.get("username") or "").strip()
-        if not username:
-            raise ValueError("username is required")
-        labels = payload.get("labels")
-        if not isinstance(labels, dict):
-            raise ValueError("labels must be an object")
-        item_record["label"] = {
-            "username": username,
-            "labels": deepcopy(labels),
-            "updated_at": utc_now(),
-        }
-        self._write_records(task, records)
-        return deepcopy(item_record["label"])
+        records_path = self._records_path(task)
+        with json_write_lock(records_path):
+            records = self._read_records(task)
+            item_record = records.setdefault(str(int(item_index)), {})
+            if not item_record.get("sampled"):
+                raise ValueError("标签纠错前必须先采样")
+            username = str(payload.get("username") or "").strip()
+            if not username:
+                raise ValueError("username is required")
+            label_claim = self._active_label_claim(item_record)
+            if label_claim and label_claim.get("username") != username:
+                raise ValueError("该图片已分配给其他用户进行标签纠错")
+            labels = payload.get("labels")
+            if not isinstance(labels, dict):
+                raise ValueError("labels must be an object")
+            item_record["label"] = {
+                "username": username,
+                "labels": deepcopy(labels),
+                "updated_at": utc_now(),
+            }
+            item_record.pop("label_claim", None)
+            self._write_records(task, records)
+            return deepcopy(item_record["label"])
 
     def _screen_record(self, payload: dict[str, Any], allow_empty_issue: bool) -> dict[str, Any]:
         username = normalized_import_username(payload)
@@ -1879,6 +2010,7 @@ def api_stage_items(task_id: str):
                 request.args.get("stage", "rough"),
                 username=request.args.get("username", ""),
                 include_history=clean_bool(request.args.get("include_history", False)),
+                reserve_open_label_item=True,
             )
         }
     )
