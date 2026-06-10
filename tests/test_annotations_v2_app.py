@@ -303,13 +303,122 @@ def test_v2_preview_cache_job_generates_all_resized_image_previews():
 
         assert job["progress"] == 100
         assert job["result"]["total"] == 4
-        assert job["result"]["generated_count"] == 4
+        assert job["result"]["generated_count"] == 8
         assert job["result"]["failed_count"] == 0
-        assert len(list((preview_cache_root / task["id"]).glob("*.jpg"))) == 4
+        assert len(list((preview_cache_root / task["id"]).glob("*.jpg"))) == 8
+        assert (preview_cache_root / task["id"] / "manifest.json").exists()
         assert not (Path(task["data_dir"]) / "preview_cache").exists()
     finally:
         annotations_v2_app.preview_cache_jobs = old_jobs
         annotations_v2_app.store = old_store
+
+
+def test_v2_preview_cache_job_writes_static_manifest_with_thumb_and_preview_variants():
+    from PIL import Image
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "large.jpg", (1600, 900))
+    make_test_image(tmp_path / "dst" / "large.jpg", (1200, 1000))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/large.jpg", "dst_image": "dst/large.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    result = store.warm_preview_cache(task["id"])
+
+    manifest_path = preview_cache_root / task["id"] / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    src_entry = manifest["items"]["0"]["src"]
+    dst_entry = manifest["items"]["0"]["dst"]
+    assert result["total"] == 2
+    assert result["generated_count"] == 4
+    assert result["failed_count"] == 0
+    assert src_entry["variants"]["thumb"]["url"].startswith(f"/annotation-assets/{task['id']}/")
+    assert src_entry["variants"]["preview"]["url"].startswith(f"/annotation-assets/{task['id']}/")
+    assert dst_entry["variants"]["thumb"]["url"].startswith(f"/annotation-assets/{task['id']}/")
+    assert max(Image.open(preview_cache_root / task["id"] / src_entry["variants"]["thumb"]["path"]).size) == 512
+    assert max(Image.open(preview_cache_root / task["id"] / src_entry["variants"]["preview"]["path"]).size) == 1024
+
+
+def test_v2_stage_items_prefer_static_manifest_image_urls_and_keep_original_fallback():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "large.jpg", (1600, 900))
+    make_test_image(tmp_path / "dst" / "large.jpg", (1200, 1000))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/large.jpg", "dst_image": "dst/large.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        annotations_v2_app.store.warm_preview_cache(task["id"])
+        client = annotations_v2_app.app.test_client()
+
+        response = client.get(f"/api/tasks/{task['id']}/items?stage=rough&username=alice")
+
+        item = response.get_json()["items"][0]
+        assert response.status_code == 200
+        assert item["image_urls"]["src"].startswith(f"/annotation-assets/{task['id']}/")
+        assert item["image_urls"]["dst"].startswith(f"/annotation-assets/{task['id']}/")
+        assert item["image_urls"]["src_thumb"].startswith(f"/annotation-assets/{task['id']}/")
+        assert item["image_urls"]["dst_thumb"].startswith(f"/annotation-assets/{task['id']}/")
+        assert item["image_urls"]["src_original"].endswith("/src?original=1")
+        assert item["image_urls"]["dst_original"].endswith("/dst?original=1")
+    finally:
+        annotations_v2_app.store = old_store
+
+
+def test_v2_stage_items_fall_back_to_flask_image_urls_without_manifest():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "a.jpg", (800, 600))
+    make_test_image(tmp_path / "dst" / "a.jpg", (800, 600))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    item = store.list_stage_items(task["id"], "rough", username="alice")[0]
+
+    assert item["image_urls"]["src"] == f"/api/tasks/{task['id']}/images/0/src"
+    assert item["image_urls"]["dst"] == f"/api/tasks/{task['id']}/images/0/dst"
+    assert item["image_urls"]["src_thumb"] == item["image_urls"]["src"]
+    assert item["image_urls"]["dst_thumb"] == item["image_urls"]["dst"]
+
+
+def test_v2_task_payload_reports_static_preview_cache_status():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "a.jpg", (1200, 800))
+    make_test_image(tmp_path / "dst" / "a.jpg", (1200, 800))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    before = store.list_tasks()[0]["preview_cache"]
+    store.warm_preview_cache(task["id"])
+    after = store.list_tasks()[0]["preview_cache"]
+
+    assert before["total_images"] == 2
+    assert before["generated_images"] == 0
+    assert before["cache_ready"] is False
+    assert after["total_images"] == 2
+    assert after["generated_images"] == 2
+    assert after["failed_images"] == 0
+    assert after["missing_images"] == 0
+    assert after["cache_ready"] is True
 
 
 def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
@@ -339,20 +448,27 @@ def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
     max_active_count = 0
     lock = threading.Lock()
 
-    def fake_resized_image_file(path, cache_dir, max_edge=1024):
+    def fake_resized_image_variant(path, cache_dir, cache_key, variant, max_edge):
         nonlocal active_count, max_active_count
         with lock:
             active_count += 1
             max_active_count = max(max_active_count, active_count)
         try:
             time.sleep(0.03)
-            return Path(path).resolve(), "image/jpeg"
+            return {
+                "path": f"{cache_key}.{variant}.jpg",
+                "url": "",
+                "width": max_edge,
+                "height": max_edge,
+                "size": 1,
+                "mimetype": "image/jpeg",
+            }
         finally:
             with lock:
                 active_count -= 1
 
     monkeypatch.setattr(annotations_v2_app, "ThreadPoolExecutor", CapturingThreadPoolExecutor, raising=False)
-    monkeypatch.setattr(annotations_v2_app, "resized_image_file", fake_resized_image_file)
+    monkeypatch.setattr(annotations_v2_app, "resized_image_variant", fake_resized_image_variant)
 
     store = AnnotationV2Store(tmp_path / "state.json")
     task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
@@ -1809,11 +1925,15 @@ def test_v2_frontend_preloads_next_three_preview_pages():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
     assert "const PRELOAD_FORWARD_PAGES = 3;" in script
+    assert "const PRELOAD_CONCURRENCY = 4;" in script
     assert "const preloadedImages = new Map();" in script
-    assert "function preparePreviewImage(image, previewSrc)" in script
+    assert "const preloadQueue = [];" in script
+    assert "let activePreloadCount = 0;" in script
+    assert "function preparePreviewImage(image, previewSrc, thumbSrc, originalSrc)" in script
     assert 'image.fetchPriority = "high";' in script
-    assert 'preparePreviewImage($("srcImage"), item.image_urls.src);' in script
-    assert 'preparePreviewImage($("dstImage"), item.image_urls.dst);' in script
+    assert "preview.decode()" in script
+    assert 'preparePreviewImage($("srcImage"), item.image_urls.src, item.image_urls.src_thumb, item.image_urls.src_original);' in script
+    assert 'preparePreviewImage($("dstImage"), item.image_urls.dst, item.image_urls.dst_thumb, item.image_urls.dst_original);' in script
     assert "function preloadStageNeighbors()" in script
     assert "function preloadNeighborItems(items, currentIndex)" in script
     assert "offset <= PRELOAD_FORWARD_PAGES" in script
@@ -1821,6 +1941,10 @@ def test_v2_frontend_preloads_next_three_preview_pages():
     assert "function preloadVisualizationNeighbors()" in script
     assert "preloadVisualizationNeighbors().catch((error) => console.warn(error));" in script
     assert "function preloadVisualizationPageImages(page)" in script
+    assert "enqueuePreloadImage(" in script
+    assert "function runPreloadQueue()" in script
+    assert "if (activePreloadCount >= PRELOAD_CONCURRENCY)" in script
+    assert 'preload.fetchPriority = "low";' in script
 
 
 def test_v2_frontend_renders_collapsed_generation_prompt_markdown_below_images():
