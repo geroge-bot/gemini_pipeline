@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any
 
-from web.annotations_v3 import assets, datasets, storage
+from web.annotations_v3 import assets, datasets, sampling, storage
 from web.annotations_v3 import records
 
 
@@ -42,24 +42,27 @@ def stage_candidate_item_ids(dataset_id: str, stage: str) -> list[str]:
         raise ValueError("stage 必须是 rough、fine 或 label")
     items = datasets.load_items(dataset_id)
     ranks = datasets.item_rank_map(dataset_id)
-    records = _records(dataset_id)
+    records_doc = _records(dataset_id)
     if stage == "rough":
         candidates = [item["item_id"] for item in items]
     elif stage == "fine":
         candidates = [
             item["item_id"]
             for item in items
-            if records.get(item["item_id"], {}).get("rough", {}).get("status") == "effective"
-            and records.get(item["item_id"], {}).get("rough", {}).get("values", {}).get("quality", {}).get(
+            if records_doc.get(item["item_id"], {}).get("rough", {}).get("status") == "effective"
+            and records_doc.get(item["item_id"], {}).get("rough", {}).get("values", {}).get("quality", {}).get(
                 "has_issue"
             )
             is False
         ]
     else:
+        sample_version = sampling.current_sample_version(records_doc)
         candidates = [
             item["item_id"]
             for item in items
-            if records.get(item["item_id"], {}).get("sample", {}).get("sampled") is True
+            if records_doc.get(item["item_id"], {}).get("sample", {}).get("sampled") is True
+            and int(records_doc.get(item["item_id"], {}).get("sample", {}).get("sample_version", 0) or 0)
+            == sample_version
         ]
     return sorted(candidates, key=lambda item_id: ranks[item_id])
 
@@ -99,7 +102,10 @@ def stage_gate_open(dataset_id: str, records_doc: dict[str, Any], item_id: str, 
         ) is False
     if stage == "label":
         sample = records_doc.get(item_id, {}).get("sample", {})
-        return sample.get("sampled") is True
+        return (
+            sample.get("sampled") is True
+            and int(sample.get("sample_version", 0) or 0) == sampling.current_sample_version(records_doc)
+        )
     return False
 
 
@@ -142,16 +148,18 @@ def get_or_create_candidate_snapshot(
     stage_snapshots = [snap for snap in doc["snapshots"] if snap.get("stage") == stage]
     item_ids = stage_candidate_item_ids(dataset_id, stage)
     current_hash = candidate_hash(item_ids)
+    sample_version = sampling.current_sample_version(_records(dataset_id)) if stage == "label" else None
     if stage_snapshots and not force_refresh:
         latest = stage_snapshots[-1]
-        if latest.get("candidate_hash") == current_hash or _snapshot_has_remaining_claimable_work(dataset_id, latest):
-            return latest
+        if stage != "label" or latest.get("sample_version") == sample_version:
+            if latest.get("candidate_hash") == current_hash or _snapshot_has_remaining_claimable_work(dataset_id, latest):
+                return latest
     snapshot = {
         "snapshot_id": f"{stage}-snap-{len(stage_snapshots) + 1:04d}",
         "dataset_id": dataset_id,
         "stage": stage,
         "order_version": 1,
-        "sample_version": None,
+        "sample_version": sample_version,
         "candidate_hash": current_hash,
         "created_at": utc_now(),
         "item_count": len(item_ids),

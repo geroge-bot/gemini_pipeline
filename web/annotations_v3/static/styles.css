@@ -38,6 +38,11 @@ button, .button, .buttonLike {
 
 button:hover, .button:hover, .buttonLike:hover { background: var(--accent-dark); }
 
+button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 .ghost {
   color: var(--text);
   background: #e8edf2;
@@ -368,22 +373,119 @@ label {
   font-size: 13px;
 }
 
+.sampleGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.sampleControls {
+  display: grid;
+  gap: 12px;
+}
+
+.bucketRows,
+.resultsList {
+  display: grid;
+  gap: 10px;
+}
+
+.bucketRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e5e9ef;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fbfcfd;
+}
+
+.bucketRow span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.resultControls {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+}
+
+.resultControls label {
+  width: 120px;
+}
+
+.resultRow {
+  display: grid;
+  gap: 12px;
+}
+
+.resultRowHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.resultRowHead p,
+.resultMeta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.resultRowHead strong,
+.resultRowHead p {
+  overflow-wrap: anywhere;
+}
+
+.resultMeta {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+  text-align: right;
+}
+
+.resultRowBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 14px;
+  align-items: start;
+}
+
+.resultReadonly {
+  border-top: 0;
+  padding-top: 0;
+}
+
 @media (max-width: 820px) {
   .layout,
   .stageGrid,
   .imagePair,
-  .progressGrid {
+  .progressGrid,
+  .sampleGrid,
+  .resultRowBody {
     grid-template-columns: 1fr;
   }
 
   .pager,
-  .topbarActions {
+  .topbarActions,
+  .resultControls,
+  .resultRowHead {
     justify-content: stretch;
+    flex-wrap: wrap;
   }
 
   .pager button,
   .topbarActions .buttonLike,
   .topbarActions button {
     flex: 1;
+  }
+
+  .resultControls label,
+  .resultMeta {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
   }
 }

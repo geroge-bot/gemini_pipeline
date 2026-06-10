@@ -26,3 +26,24 @@ export function saveAnnotationPatch(datasetId, itemId, payload) {
     body: JSON.stringify(payload)
   });
 }
+
+export function getSampleBuckets(datasetId, paths) {
+  const params = new URLSearchParams({paths: paths.join(",")});
+  return requestJson(`/api/datasets/${datasetId}/sample-buckets?${params.toString()}`);
+}
+
+export function runSample(datasetId, payload) {
+  return requestJson(`/api/datasets/${datasetId}/sample`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getVisualizationResults(datasetId, {stage, page, pageSize}) {
+  const params = new URLSearchParams({
+    stage,
+    page: String(page),
+    page_size: String(pageSize)
+  });
+  return requestJson(`/api/datasets/${datasetId}/visualization-results?${params.toString()}`);
+}
