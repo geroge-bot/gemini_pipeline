@@ -366,6 +366,77 @@ def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
     assert result["failed_count"] == 0
 
 
+def test_v2_preview_cache_deduplicates_repeated_image_paths(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "shared" / "src.jpg", (1200, 800))
+    make_test_image(tmp_path / "shared" / "dst.jpg", (1300, 900))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "shared/src.jpg", "dst_image": "shared/dst.jpg"},
+            {"src_image": "shared/src.jpg", "dst_image": "shared/dst.jpg"},
+            {"src_image": "shared/src.jpg", "dst_image": "shared/dst.jpg"},
+        ],
+    )
+
+    resized_paths = []
+
+    def fake_resized_image_file(path, cache_dir, max_edge=1024):
+        resized_paths.append(Path(path).resolve())
+        return cache_dir / f"{len(resized_paths)}.jpg", "image/jpeg"
+
+    monkeypatch.setattr(annotations_v2_app, "resized_image_file", fake_resized_image_file)
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    result = store.warm_preview_cache(task["id"])
+
+    assert result["total"] == 6
+    assert result["processed_count"] == 6
+    assert result["unique_image_count"] == 2
+    assert result["duplicate_ref_count"] == 4
+    assert result["generated_count"] == 6
+    assert resized_paths == [
+        (tmp_path / "shared" / "src.jpg").resolve(),
+        (tmp_path / "shared" / "dst.jpg").resolve(),
+    ]
+
+
+def test_v2_preview_cache_job_reuses_running_task_job(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "a.jpg", (1200, 800))
+    make_test_image(tmp_path / "dst" / "a.jpg", (1200, 800))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    jobs = PreviewCacheJobs(store)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_warm_preview_cache(task_id, progress_callback=None):
+        started.set()
+        release.wait(timeout=2)
+        return {"total": 0, "processed_count": 0, "generated_count": 0, "skipped_count": 0, "failed_count": 0, "failures": []}
+
+    monkeypatch.setattr(store, "warm_preview_cache", slow_warm_preview_cache)
+
+    first = jobs.start(task["id"])
+    assert started.wait(timeout=1)
+    second = jobs.start(task["id"])
+    release.set()
+
+    assert second["id"] == first["id"]
+
+
 def test_v2_task_creation_removes_non_canonical_ai_label_fields():
     from web.annotations_v2.app import AnnotationV2Store
 

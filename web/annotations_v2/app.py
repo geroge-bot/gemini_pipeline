@@ -417,6 +417,22 @@ def cached_preview_path(cache_dir: Path, cache_key: str) -> Path | None:
     )
 
 
+def preview_cache_index(cache_dir: Path) -> dict[str, Path]:
+    if not cache_dir.exists():
+        return {}
+    return {
+        candidate.stem: candidate
+        for candidate in cache_dir.iterdir()
+        if candidate.is_file()
+        and len(candidate.stem) == 64
+        and all(char in "0123456789abcdef" for char in candidate.stem)
+    }
+
+
+def preview_cache_status_path(cache_dir: Path) -> Path:
+    return cache_dir / "cache_status.json"
+
+
 def resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> tuple[Path, str]:
     mimetype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
     cache_key = preview_cache_key(path, max_edge)
@@ -991,6 +1007,8 @@ class AnnotationV2Store:
         ]
         total = len(image_jobs)
         cache_dir = self.preview_cache_dir(task_id)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_index = preview_cache_index(cache_dir)
         result = {
             "total": total,
             "processed_count": 0,
@@ -998,53 +1016,124 @@ class AnnotationV2Store:
             "skipped_count": 0,
             "failed_count": 0,
             "failures": [],
+            "unique_image_count": 0,
+            "duplicate_ref_count": 0,
         }
         if total == 0:
             if progress_callback:
                 progress_callback(100, "没有图片需要缓存")
             return result
 
-        def warm_one(item: dict[str, Any], field: str) -> str:
+        last_status_write = 0.0
+
+        def update_progress(message: str, force_status_write: bool = False) -> None:
+            nonlocal last_status_write
+            if progress_callback:
+                percent = round((result["processed_count"] / total) * 100) if total else 100
+                progress_callback(percent, message)
+            now = utc_now()
+            if not force_status_write and result["processed_count"] < total and now - last_status_write < 1:
+                return
+            last_status_write = now
+            write_json_file(
+                preview_cache_status_path(cache_dir),
+                {
+                    "task_id": task_id,
+                    "status": "running",
+                    "updated_at": utc_now(),
+                    "progress": round((result["processed_count"] / total) * 100) if total else 100,
+                    "result": result,
+                },
+            )
+
+        pending: dict[str, dict[str, Any]] = {}
+        key_by_path: dict[str, str] = {}
+        referenced_cache_keys: set[str] = set()
+        for item, kind, field in image_jobs:
+            item_index = item.get("item_index")
             raw_path = Path(str(item[field]))
             image_path = raw_path if raw_path.is_absolute() else Path(task["root_dir"]) / raw_path
-            if not image_path.exists() or not image_path.is_file():
-                raise FileNotFoundError(str(image_path))
+            try:
+                if not image_path.exists() or not image_path.is_file():
+                    raise FileNotFoundError(str(image_path))
+                resolved_key = str(image_path.resolve())
+                cache_key = key_by_path.get(resolved_key)
+                if cache_key is None:
+                    cache_key = preview_cache_key(image_path)
+                    key_by_path[resolved_key] = cache_key
+                referenced_cache_keys.add(cache_key)
+                if cache_key in cache_index:
+                    result["skipped_count"] += 1
+                    result["processed_count"] += 1
+                    continue
+                group = pending.setdefault(
+                    cache_key,
+                    {
+                        "image_path": image_path,
+                        "refs": [],
+                    },
+                )
+                group["refs"].append({"item_index": item_index, "kind": kind})
+            except Exception as exc:  # noqa: BLE001 - keep warming the rest of the task
+                result["failed_count"] += 1
+                result["processed_count"] += 1
+                result["failures"].append(
+                    {
+                        "item_index": item_index,
+                        "kind": kind,
+                        "error": str(exc),
+                    }
+                )
 
-            cache_key = preview_cache_key(image_path)
-            had_cached_preview = cached_preview_path(cache_dir, cache_key) is not None
+        result["unique_image_count"] = len(referenced_cache_keys)
+        result["duplicate_ref_count"] = total - len(referenced_cache_keys)
+        if result["processed_count"]:
+            update_progress(f"正在缓存图片 {result['processed_count']} / {total}", force_status_write=True)
+
+        def warm_one(image_path: Path) -> str:
             preview_path, _ = resized_image_file(image_path, cache_dir)
-            return "skipped" if had_cached_preview or preview_path.resolve() == image_path.resolve() else "generated"
+            return "skipped" if preview_path.resolve() == image_path.resolve() else "generated"
 
         with ThreadPoolExecutor(max_workers=PREVIEW_CACHE_WORKERS) as executor:
             futures = {
-                executor.submit(warm_one, item, field): (item.get("item_index"), kind)
-                for item, kind, field in image_jobs
+                executor.submit(warm_one, group["image_path"]): group
+                for group in pending.values()
             }
             for future in as_completed(futures):
-                item_index, kind = futures[future]
+                group = futures[future]
+                refs = group["refs"]
                 try:
                     status = future.result()
                     if status == "skipped":
-                        result["skipped_count"] += 1
+                        result["skipped_count"] += len(refs)
                     else:
-                        result["generated_count"] += 1
+                        result["generated_count"] += len(refs)
                 except Exception as exc:  # noqa: BLE001 - keep warming the rest of the task
-                    result["failed_count"] += 1
-                    result["failures"].append(
-                        {
-                            "item_index": item_index,
-                            "kind": kind,
-                            "error": str(exc),
-                        }
-                    )
+                    result["failed_count"] += len(refs)
+                    for ref in refs:
+                        result["failures"].append(
+                            {
+                                "item_index": ref["item_index"],
+                                "kind": ref["kind"],
+                                "error": str(exc),
+                            }
+                        )
                 finally:
-                    result["processed_count"] += 1
-                    if progress_callback:
-                        percent = round((result["processed_count"] / total) * 100)
-                        progress_callback(percent, f"正在缓存图片 {result['processed_count']} / {total}")
+                    result["processed_count"] += len(refs)
+                    update_progress(f"正在缓存图片 {result['processed_count']} / {total}")
 
         if progress_callback:
             progress_callback(100, "图片缓存完成")
+        write_json_file(
+            preview_cache_status_path(cache_dir),
+            {
+                "task_id": task_id,
+                "status": "completed",
+                "updated_at": utc_now(),
+                "progress": 100,
+                "result": result,
+            },
+        )
         return result
 
     def delete_task(self, task_id: str) -> dict[str, Any]:
@@ -1872,6 +1961,18 @@ class PreviewCacheJobs:
         self._jobs: dict[str, dict[str, Any]] = {}
 
     def start(self, task_id: str) -> dict[str, Any]:
+        with self._lock:
+            running_job = next(
+                (
+                    job
+                    for job in self._jobs.values()
+                    if job.get("task_id") == task_id and job.get("status") == "running"
+                ),
+                None,
+            )
+            if running_job:
+                return deepcopy(running_job)
+
         job_id = str(uuid.uuid4())
         job = {
             "id": job_id,
