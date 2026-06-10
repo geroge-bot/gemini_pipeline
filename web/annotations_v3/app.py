@@ -5,6 +5,7 @@ from flask import Flask, jsonify, render_template, request
 from web.annotations_v3 import assets
 from web.annotations_v3 import assignments
 from web.annotations_v3 import datasets
+from web.annotations_v3 import imports
 from web.annotations_v3 import records
 from web.annotations_v3 import sampling
 from web.annotations_v3 import schema
@@ -53,6 +54,13 @@ def create_app() -> Flask:
                 dataset=datasets.get_dataset(dataset_id),
                 stage=request.args.get("stage", "rough"),
             )
+        except FileNotFoundError:
+            return "dataset not found", 404
+
+    @app.get("/datasets/<dataset_id>/imports")
+    def page_imports(dataset_id: str):
+        try:
+            return render_template("imports.html", dataset=datasets.get_dataset(dataset_id))
         except FileNotFoundError:
             return "dataset not found", 404
 
@@ -163,6 +171,57 @@ def create_app() -> Flask:
             )
         except FileNotFoundError:
             return jsonify({"error": "dataset not found"}), 404
+
+    @app.post("/api/datasets/<dataset_id>/imports/validate")
+    def api_validate_import(dataset_id: str):
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                imports.run_import(
+                    dataset_id,
+                    payload["path"],
+                    "dry_run",
+                    payload.get("merge_policy", "patch_labels"),
+                    payload.get("stage_record_policy", "import_as_external_snapshot"),
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "dataset or import source not found"}), 404
+
+    @app.post("/api/datasets/<dataset_id>/imports")
+    def api_commit_import(dataset_id: str):
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                imports.run_import(
+                    dataset_id,
+                    payload["path"],
+                    "commit",
+                    payload.get("merge_policy", "patch_labels"),
+                    payload.get("stage_record_policy", "import_as_external_snapshot"),
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "dataset or import source not found"}), 404
+
+    @app.get("/api/datasets/<dataset_id>/imports/<import_id>")
+    def api_get_import(dataset_id: str, import_id: str):
+        try:
+            return jsonify(imports.load_import_report(dataset_id, import_id))
+        except FileNotFoundError:
+            return jsonify({"error": "import not found"}), 404
+
+    @app.get("/api/datasets/<dataset_id>/imports/<import_id>/errors")
+    def api_get_import_errors(dataset_id: str, import_id: str):
+        try:
+            report = imports.load_import_report(dataset_id, import_id)
+        except FileNotFoundError:
+            return jsonify({"error": "import not found"}), 404
+        return jsonify({"errors": report.get("errors", [])})
 
     @app.post("/api/datasets/<dataset_id>/assets/jobs")
     def api_create_asset_job(dataset_id: str):
