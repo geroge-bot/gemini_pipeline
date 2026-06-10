@@ -29,7 +29,8 @@
           "输入图",
           "菜品种类"
         ]
-      ]
+      ],
+      "generation_prompt_dir": "/Users/george/data/20260520/output/output_gen_json"
     }
   ]
 }

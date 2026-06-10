@@ -69,7 +69,9 @@
       "updated_at": 1780975064.1017,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "0": {
     "rough": {
@@ -94,8 +96,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -116,7 +116,9 @@
         }
       },
       "updated_at": 1780986998.5100238
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "1": {
     "rough": {
@@ -141,8 +143,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -163,7 +163,9 @@
         }
       },
       "updated_at": 1780987000.250907
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "3": {
     "rough": {
@@ -188,8 +190,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -210,7 +210,9 @@
         }
       },
       "updated_at": 1780987001.335741
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "4": {
     "rough": {
@@ -235,8 +237,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -257,7 +257,9 @@
         }
       },
       "updated_at": 1780987001.7969122
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "5": {
     "rough": {
@@ -426,8 +428,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -448,7 +448,9 @@
         }
       },
       "updated_at": 1780987002.180532
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "10": {
     "rough": {
@@ -545,8 +547,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=西餐",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -567,7 +567,9 @@
         }
       },
       "updated_at": 1780987002.5662389
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐"
   },
   "13": {
     "rough": {
@@ -592,8 +594,6 @@
       "annotator_count": 1,
       "required_annotator_count": 1
     },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶",
     "fine_annotations": [
       {
         "username": "孙本元",
@@ -614,7 +614,9 @@
         }
       },
       "updated_at": 1780987002.901261
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "14": {
     "rough": {
@@ -722,6 +724,17 @@
       "updated_at": 1780975059.929749,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011047.68991
     }
   },
   "17": {
@@ -758,6 +771,17 @@
       "updated_at": 1780975060.410608,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011048.306474
     }
   },
   "18": {
@@ -794,6 +818,17 @@
       "updated_at": 1780975060.8421938,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "西餐"
+        }
+      },
+      "updated_at": 1781011048.790333
     }
   },
   "19": {
@@ -830,6 +865,17 @@
       "updated_at": 1780975061.25486,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011049.270972
     }
   },
   "20": {
@@ -866,6 +912,17 @@
       "updated_at": 1780975061.703294,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011049.85443
     }
   },
   "21": {
@@ -902,6 +959,17 @@
       "updated_at": 1780975061.939887,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011050.336975
     }
   },
   "22": {
@@ -938,6 +1006,17 @@
       "updated_at": 1780975062.4177668,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011050.8329191
     }
   },
   "23": {
@@ -974,6 +1053,17 @@
       "updated_at": 1780975062.8322382,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本猿",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781011051.266764
     }
   },
   "24": {
@@ -1010,7 +1100,9 @@
       "updated_at": 1780975063.2630138,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐"
   },
   "25": {
     "rough": {
@@ -1046,7 +1138,9 @@
       "updated_at": 1780975063.687066,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=西餐"
   },
   "27": {
     "rough": {
@@ -1082,7 +1176,9 @@
       "updated_at": 1780975064.518791,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "28": {
     "rough": {
@@ -1118,7 +1214,9 @@
       "updated_at": 1780975064.756178,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "3784": {
     "rough_annotations": [
@@ -1272,7 +1370,9 @@
       "updated_at": 1780975059.70047,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3789": {
     "rough_annotations": [
@@ -1322,7 +1422,9 @@
       "updated_at": 1780975060.17276,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3790": {
     "rough_annotations": [
@@ -1372,7 +1474,9 @@
       "updated_at": 1780975060.6232178,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3791": {
     "rough_annotations": [
@@ -1422,7 +1526,9 @@
       "updated_at": 1780975061.046314,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3792": {
     "rough_annotations": [
@@ -1472,7 +1578,9 @@
       "updated_at": 1780975061.490978,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3793": {
     "rough_annotations": [
@@ -1548,7 +1656,9 @@
       "updated_at": 1780975062.1855612,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "3795": {
     "rough_annotations": [
@@ -1598,7 +1708,9 @@
       "updated_at": 1780975062.616579,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=下午茶"
   },
   "3796": {
     "rough_annotations": [
@@ -1648,7 +1760,9 @@
       "updated_at": 1780975063.058688,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3797": {
     "rough_annotations": [
@@ -1698,7 +1812,9 @@
       "updated_at": 1780975063.474138,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3798": {
     "rough_annotations": [
@@ -1748,7 +1864,9 @@
       "updated_at": 1780975063.906357,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3799": {
     "rough_annotations": [
@@ -1798,7 +1916,9 @@
       "updated_at": 1780975064.322285,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3800": {
     "rough_annotations": [
@@ -1900,7 +2020,9 @@
       "updated_at": 1780975064.95877,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "3803": {
     "rough_annotations": [
@@ -1950,7 +2072,9 @@
       "updated_at": 1780975065.1684082,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3804": {
     "rough_annotations": [
@@ -2000,7 +2124,9 @@
       "updated_at": 1780975065.385685,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3805": {
     "rough_annotations": [
@@ -2076,7 +2202,9 @@
       "updated_at": 1780975065.601011,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉,野餐露营"
   },
   "3807": {
     "rough_annotations": [
@@ -2126,7 +2254,9 @@
       "updated_at": 1780975065.826293,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3808": {
     "rough_annotations": [
@@ -2176,7 +2306,9 @@
       "updated_at": 1780975066.030228,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3809": {
     "rough_annotations": [
@@ -2212,7 +2344,7 @@
         "issues": [],
         "other_issue": "",
         "note": "",
-        "updated_at": 1780974983.228194
+        "updated_at": 1781008104.3663309
       }
     ],
     "fine": {
@@ -2223,10 +2355,12 @@
       "issues": [],
       "other_issue": "",
       "note": "",
-      "updated_at": 1780974983.228194,
+      "updated_at": 1781008104.3663309,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3810": {
     "rough_annotations": [
@@ -2262,7 +2396,7 @@
         "issues": [],
         "other_issue": "",
         "note": "",
-        "updated_at": 1780975052.4537458
+        "updated_at": 1781008104.7764149
       }
     ],
     "fine": {
@@ -2273,10 +2407,12 @@
       "issues": [],
       "other_issue": "",
       "note": "",
-      "updated_at": 1780975052.4537458,
+      "updated_at": 1781008104.7764149,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3811": {
     "rough_annotations": [
@@ -2312,7 +2448,7 @@
         "issues": [],
         "other_issue": "",
         "note": "",
-        "updated_at": 1780975052.870511
+        "updated_at": 1781008105.843924
       }
     ],
     "fine": {
@@ -2323,10 +2459,12 @@
       "issues": [],
       "other_issue": "",
       "note": "",
-      "updated_at": 1780975052.870511,
+      "updated_at": 1781008105.843924,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "3812": {
     "rough_annotations": [
@@ -2690,7 +2828,33 @@
       "updated_at": 1780975522.619178,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006155.7789881
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006155.7789881,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "4614": {
     "rough_annotations": [
@@ -2716,7 +2880,33 @@
       "updated_at": 1780975523.578657,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006156.1462002
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006156.1462002,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "4615": {
     "rough_annotations": [
@@ -2768,7 +2958,33 @@
       "updated_at": 1780975525.58672,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006154.91501
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006154.91501,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "4617": {
     "rough_annotations": [
@@ -2794,7 +3010,33 @@
       "updated_at": 1780975526.210708,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006153.205102
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006153.205102,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "4618": {
     "rough_annotations": [
@@ -2818,6 +3060,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1780975526.8351948,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006144.47572
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006144.47572,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -2846,7 +3112,33 @@
       "updated_at": 1780975527.3468711,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006159.273831
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006159.273831,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=野餐露营"
   },
   "4620": {
     "rough_annotations": [
@@ -2870,6 +3162,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1780975528.011313,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006145.5534
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006145.5534,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -2898,7 +3214,33 @@
       "updated_at": 1780975845.084758,
       "annotator_count": 1,
       "required_annotator_count": 1
-    }
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006154.372064
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006154.372064,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
   },
   "4721": {
     "rough_annotations": [
@@ -3010,6 +3352,940 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1780975859.6503282,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006155.371855
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006155.371855,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "sampled": true,
+    "sample_bucket": "输入图/菜品种类=烧烤烤肉"
+  },
+  "2510": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781003039.2123032
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781003039.2123032,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781006142.6681468
+      }
+    ],
+    "fine": {
+      "username": "孙本猿",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781006142.6681468,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "4792": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007468.733567
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007468.733567,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3825": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007470.623662
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007470.623662,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3827": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007471.566103
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007471.566103,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3829": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007478.9430609
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007478.9430609,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3831": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007481.367251
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007481.367251,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3830": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781007484.628564
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781007484.628564,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3824": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008002.1013188
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008002.1013188,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3828": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008003.237011
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008003.237011,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3833": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008004.3555021
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008004.3555021,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3835": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008005.764639
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008005.764639,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3837": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008007.476969
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008007.476969,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3839": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008008.494293
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008008.494293,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3826": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008067.7721221
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008067.7721221,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3832": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008069.0038688
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008069.0038688,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3834": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008069.842838
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008069.842838,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3836": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008071.015799
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008071.015799,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3838": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008071.91782
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008071.91782,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3840": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008073.04334
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008073.04334,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3841": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008087.416951
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008087.416951,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3842": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008088.9576352
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008088.9576352,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3843": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008089.692373
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008089.692373,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3844": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008090.347672
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008090.347672,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "3845": {
+    "rough_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781008091.439371
+      }
+    ],
+    "rough": {
+      "username": "孙本元",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781008091.439371,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2832": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011009.7282681
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011009.7282681,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2833": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011010.808191
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011010.808191,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2834": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 3,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011011.8482969
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 3,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011011.8482969,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2835": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 2,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011012.839438
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 2,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011012.839438,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2836": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011013.7990348
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011013.7990348,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2837": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011015.240997
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011015.240997,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2838": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011016.310954
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011016.310954,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2839": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011017.646222
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011017.646222,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2840": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011018.289651
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011018.289651,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    }
+  },
+  "2841": {
+    "rough_annotations": [
+      {
+        "username": "孙本猿",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781011019.151684
+      }
+    ],
+    "rough": {
+      "username": "孙本猿",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781011019.151684,
       "annotator_count": 1,
       "required_annotator_count": 1
     }

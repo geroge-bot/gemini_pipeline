@@ -29,6 +29,45 @@ def write_json(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
+def test_v2_json_file_writes_are_safe_when_concurrent(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+
+    tmp_path = make_workspace_tmp()
+    path = tmp_path / "state.json"
+    original_dump = annotations_v2_app.json.dump
+    dump_condition = threading.Condition()
+    entered_dumps = 0
+
+    def slow_dump(data, handle, **kwargs):
+        nonlocal entered_dumps
+        handle.write("{")
+        handle.flush()
+        with dump_condition:
+            entered_dumps += 1
+            dump_condition.notify_all()
+            if entered_dumps < 2:
+                dump_condition.wait(timeout=0.2)
+        handle.seek(0)
+        handle.truncate()
+        original_dump(data, handle, **kwargs)
+
+    monkeypatch.setattr(annotations_v2_app.json, "dump", slow_dump)
+
+    with RealThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(annotations_v2_app.write_json_file, path, {"writer": "alice"}),
+            executor.submit(annotations_v2_app.write_json_file, path, {"writer": "bob"}),
+        ]
+        errors = []
+        for future in futures:
+            error = future.exception(timeout=5)
+            if error is not None:
+                errors.append(error)
+
+    assert errors == []
+    assert json.loads(path.read_text(encoding="utf-8")) in [{"writer": "alice"}, {"writer": "bob"}]
+
+
 def make_test_image(path, size):
     from PIL import Image
 

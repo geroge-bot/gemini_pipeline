@@ -31,6 +31,8 @@ INPUT_GROUP_NAME = "输入图"
 OUTPUT_GROUP_NAME = "输出图"
 VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
 TASK_DELETE_ADMIN_USERNAME = "孙本猿"
+JSON_WRITE_LOCKS: dict[Path, threading.RLock] = {}
+JSON_WRITE_LOCKS_GUARD = threading.Lock()
 CANONICAL_LABEL_DIMENSIONS = {
     str(group["name"]): {
         str(dimension["name"])
@@ -109,12 +111,27 @@ def read_json_file(path: Path, default: Any) -> Any:
         return json.load(handle)
 
 
+def json_write_lock(path: Path) -> threading.RLock:
+    resolved_path = path.resolve()
+    with JSON_WRITE_LOCKS_GUARD:
+        lock = JSON_WRITE_LOCKS.get(resolved_path)
+        if lock is None:
+            lock = threading.RLock()
+            JSON_WRITE_LOCKS[resolved_path] = lock
+        return lock
+
+
 def write_json_file(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    with tmp_path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, path)
+    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    with json_write_lock(path):
+        try:
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(data, handle, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
 
 
 def label_json_path(root_dir: Path, label_dir: Path, image_path: str) -> Path:

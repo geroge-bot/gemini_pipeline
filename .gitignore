@@ -35,3 +35,4 @@ Thumbs.db
 annotations_test_tmp/
 tests/_scratch*/
 web/annotations/data/
+web/annotations_v2/data/**/preview_cache/
