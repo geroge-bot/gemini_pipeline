@@ -1187,6 +1187,54 @@ def test_v2_import_annotations_jsonl_merges_screening_sampling_and_labels():
     assert second_record["rough"]["has_defect"] is True
 
 
+def test_v2_import_annotations_with_corrected_labels_marks_item_sampled():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    import_path = tmp_path / "v2-labels.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    write_jsonl(
+        import_path,
+        [
+            {
+                "item_index": 0,
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "original_labels": {"输入图": {"菜品种类": "中餐"}},
+                "corrected_labels": {"输入图": {"菜品种类": "融合菜", "景别_v2": "污染字段"}},
+                "label_username": "label-user",
+                "label_updated_at": 12345,
+            }
+        ],
+    )
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    result = store.import_annotations_jsonl(task["id"], import_path)
+
+    assert result["imported_count"] == 1
+    assert result["skipped_count"] == 0
+    assert result["updated_items"] == 1
+    assert result["updated_records"] == 1
+    assert result["summary"]["sampled"] == 1
+    assert result["summary"]["label_completed"] == 1
+
+    item = store.list_stage_items(task["id"], "rough", include_history=True)[0]
+    assert item["labels"] == {"输入图": {"菜品种类": "中餐"}}
+
+    records = store._read_records(store._require_task(task["id"]))
+    record = records["0"]
+    assert record["sampled"] is True
+    assert record["label"]["username"] == "label-user"
+    assert record["label"]["labels"] == {"输入图": {"菜品种类": "融合菜"}}
+
+    total, label_rows = store.get_visualization_results(task["id"], "label")
+    assert total == 1
+    assert label_rows[0]["corrected_labels"] == {"输入图": {"菜品种类": "融合菜"}}
+
+
 def test_v2_import_annotations_api_accepts_jsonl_path():
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store

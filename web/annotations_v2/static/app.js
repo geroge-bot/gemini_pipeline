@@ -365,7 +365,7 @@ async function importTaskAnnotations(taskId) {
     body: JSON.stringify({ jsonl_path: jsonlPath.trim() }),
   });
   const result = data.result || {};
-  showToast(`导入完成：${result.imported_count || 0} 条，未匹配 ${result.unmatched_count || 0} 条`);
+  showToast(`导入完成：更新 ${result.imported_count || 0} 条，跳过 ${result.skipped_count || 0} 条，未匹配 ${result.unmatched_count || 0} 条`);
   await loadTasks();
 }
 

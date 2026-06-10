@@ -812,6 +812,7 @@ class AnnotationV2Store:
                 item_record["sample_bucket"] = str(row.get("sample_bucket") or "")
                 record_changed = True
             if self._import_label_record(item_record, row):
+                item_record["sampled"] = True
                 record_changed = True
 
             if item_changed or record_changed:
