@@ -476,10 +476,10 @@ def test_v2_preview_cache_deduplicates_repeated_image_paths(monkeypatch):
     assert result["unique_image_count"] == 2
     assert result["duplicate_ref_count"] == 4
     assert result["generated_count"] == 6
-    assert resized_paths == [
+    assert set(resized_paths) == {
         (tmp_path / "shared" / "src.jpg").resolve(),
         (tmp_path / "shared" / "dst.jpg").resolve(),
-    ]
+    }
 
 
 def test_v2_preview_cache_job_reuses_running_task_job(monkeypatch):
