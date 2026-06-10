@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ dataset.name }} - 抽样</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="sample" data-dataset-id="{{ dataset.dataset_id }}">
+  <section id="loginView" class="loginView">
+    <form id="loginForm" class="loginCard">
+      <h1>数据标注流程 V3</h1>
+      <input id="loginUsernameInput" autocomplete="username" placeholder="用户名">
+      <button type="submit">进入抽样</button>
+    </form>
+  </section>
+
+  <div id="appView" class="hidden">
+    <header class="topbar hidden">
+      <div>
+        <h1>{{ dataset.name }}</h1>
+        <p id="sessionLine"></p>
+      </div>
+      <div class="topbarActions">
+        <a class="buttonLike ghost" href="/datasets/{{ dataset.dataset_id }}">返回数据集</a>
+        <a class="buttonLike ghost" href="/datasets/{{ dataset.dataset_id }}/visualize?stage=sample">查看结果</a>
+        <button id="logoutBtn" class="ghost" type="button">退出</button>
+      </div>
+    </header>
+
+    <main class="pageShell">
+      <section class="workbench">
+        <div class="workHeader">
+          <div>
+            <strong>抽样配置</strong>
+            <span id="sampleStatus">等待加载</span>
+          </div>
+          <div class="pager">
+            <button id="loadBucketsBtn" class="ghost" type="button">刷新桶</button>
+            <button id="runSampleBtn" type="button">执行抽样</button>
+          </div>
+        </div>
+
+        <div class="sampleGrid">
+          <section class="panel sampleControls">
+            <label>
+              Label paths
+              <input id="pathsInput" value="labels/输入图/菜品种类">
+            </label>
+            <label>
+              每桶数量
+              <input id="perBucketInput" type="number" min="1" value="5">
+            </label>
+            <label>
+              Seed
+              <input id="seedInput" value="sample-v1">
+            </label>
+            <div id="sampleMessage" class="messageLine"></div>
+          </section>
+
+          <section class="panel">
+            <div class="sectionHead">
+              <h2>桶统计</h2>
+              <span id="bucketSummary" class="metaText"></span>
+            </div>
+            <div id="bucketRows" class="bucketRows"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <main id="sample-app" data-page="sample" data-dataset-id="{{ dataset.dataset_id }}" class="hidden"></main>
+  <script type="module" src="{{ url_for('static', filename='samplePage.js') }}"></script>
+</body>
+</html>
