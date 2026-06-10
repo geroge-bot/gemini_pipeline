@@ -22,6 +22,7 @@ const TASK_DELETE_ADMIN_USERNAME = "孙本猿";
 const PRELOAD_FORWARD_PAGES = 3;
 const MAX_PRELOADED_IMAGES = 48;
 const preloadedImages = new Map();
+let ratePagingInFlight = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -778,8 +779,19 @@ async function reloadCurrentStageAfterSave(preferredIndex) {
   renderCurrentItem();
 }
 
+function advanceCurrentStageLocally(preferredIndex) {
+  state.index = Math.max(0, Math.min(Math.max(0, state.items.length - 1), preferredIndex));
+  renderCurrentItem();
+}
+
+function setRatePagingBusy(isBusy) {
+  ratePagingInFlight = isBusy;
+  if ($("nextBtn")) $("nextBtn").disabled = isBusy;
+}
+
 async function goToItem(nextIndex) {
   if (!state.items.length) return;
+  if (ratePagingInFlight) return;
   const boundedIndex = Math.max(0, Math.min(state.items.length - 1, nextIndex));
   const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;
   if (boundedIndex === state.index && !movingPastLastItem) return;
@@ -788,11 +800,20 @@ async function goToItem(nextIndex) {
     renderCurrentItem();
     return;
   }
-  if (!(await saveCurrentStageBeforePageChange())) return;
-  const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;
-  await reloadCurrentStageAfterSave(preferredIndex);
-  if (movingPastLastItem) {
-    showToast("已保存");
+  setRatePagingBusy(true);
+  try {
+    if (!(await saveCurrentStageBeforePageChange())) return;
+    const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;
+    if (state.stage === "label") {
+      advanceCurrentStageLocally(preferredIndex);
+    } else {
+      await reloadCurrentStageAfterSave(preferredIndex);
+    }
+    if (movingPastLastItem) {
+      showToast("已保存");
+    }
+  } finally {
+    setRatePagingBusy(false);
   }
 }
 

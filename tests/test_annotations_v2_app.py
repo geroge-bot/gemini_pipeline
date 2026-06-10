@@ -200,6 +200,29 @@ def test_v2_store_paths_can_be_configured_by_environment(monkeypatch):
     assert store.preview_cache_dir("task-1") == preview_cache_root / "task-1"
 
 
+def test_v2_default_server_host_matches_platform(monkeypatch):
+    import types
+
+    label_options = types.ModuleType("web.annotations.label_options")
+    label_options.LABEL_OPTION_GROUPS = []
+    monkeypatch.setitem(sys.modules, "web.annotations.label_options", label_options)
+
+    from web.annotations_v2 import app as annotations_v2_app
+
+    def set_platform(system_name):
+        fake_platform = type("FakePlatform", (), {"system": staticmethod(lambda: system_name)})
+        monkeypatch.setattr(annotations_v2_app, "platform", fake_platform, raising=False)
+
+    set_platform("Darwin")
+    assert annotations_v2_app.default_server_host() == "127.0.0.1"
+
+    set_platform("Linux")
+    assert annotations_v2_app.default_server_host() == "0.0.0.0"
+
+    set_platform("Windows")
+    assert annotations_v2_app.default_server_host() == "127.0.0.1"
+
+
 def test_v2_image_endpoint_limits_long_edge_by_default_and_can_return_original():
     from PIL import Image
     from web.annotations_v2 import app as annotations_v2_app
@@ -1839,6 +1862,24 @@ def test_v2_rate_paging_reloads_with_user_history_but_initial_entry_does_not():
     assert "state.index = firstUnannotatedItemIndex();" in open_stage_body
     assert "stageItemsUrl(taskId, stage, true)" in reload_body
     assert "const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;" in go_to_body
+
+
+def test_v2_label_forward_paging_uses_local_queue_after_autosave():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    go_to_start = script.index("async function goToItem")
+    go_to_end = script.index("function goNextItem", go_to_start)
+    go_to_body = script[go_to_start:go_to_end]
+
+    assert 'if (state.stage === "label")' in go_to_body
+    label_branch_start = go_to_body.index('if (state.stage === "label")')
+    label_branch_end = go_to_body.index("await reloadCurrentStageAfterSave", label_branch_start)
+    label_branch = go_to_body[label_branch_start:label_branch_end]
+
+    assert "function advanceCurrentStageLocally(preferredIndex)" in script
+    assert "advanceCurrentStageLocally(preferredIndex);" in label_branch
+    assert "reloadCurrentStageAfterSave" not in label_branch
+    assert "loadTasks" not in label_branch
+    assert "stageItemsUrl" not in label_branch
 
 
 def test_v2_rate_previous_page_does_not_require_saving_current_item():

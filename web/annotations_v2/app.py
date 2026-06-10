@@ -4,6 +4,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import platform
 import random
 import threading
 import time
@@ -42,6 +43,13 @@ CANONICAL_LABEL_DIMENSIONS = {
     }
     for group in LABEL_OPTION_GROUPS
 }
+
+
+def default_server_host() -> str:
+    system_name = platform.system()
+    if system_name == "Linux":
+        return "0.0.0.0"
+    return "127.0.0.1"
 
 
 def utc_now() -> float:
@@ -2201,7 +2209,7 @@ def api_image(task_id: str, item_index: int, kind: str):
 
 if __name__ == "__main__":
     app.run(
-        host="127.0.0.1",
+        host=default_server_host(),
         port=int(os.environ.get("ANNOTATIONS_V2_PORT", "5065")),
         debug=False,
         threaded=True,

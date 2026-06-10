@@ -1102,7 +1102,11 @@
       "required_annotator_count": 1
     },
     "sampled": true,
-    "sample_bucket": "输入图/菜品种类=西餐"
+    "sample_bucket": "输入图/菜品种类=西餐",
+    "label_claim": {
+      "username": "孙本元",
+      "claimed_at": 1781073060.6379251
+    }
   },
   "25": {
     "rough": {
