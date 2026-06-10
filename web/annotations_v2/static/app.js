@@ -20,11 +20,8 @@ const state = {
 
 const TASK_DELETE_ADMIN_USERNAME = "孙本猿";
 const PRELOAD_FORWARD_PAGES = 3;
-const PRELOAD_CONCURRENCY = 4;
 const MAX_PRELOADED_IMAGES = 48;
 const preloadedImages = new Map();
-const preloadQueue = [];
-let activePreloadCount = 0;
 
 const $ = (id) => document.getElementById(id);
 
@@ -493,8 +490,8 @@ function renderCurrentItem() {
   }
 
   const item = state.items[state.index];
-  preparePreviewImage($("srcImage"), item.image_urls.src, item.image_urls.src_thumb, item.image_urls.src_original);
-  preparePreviewImage($("dstImage"), item.image_urls.dst, item.image_urls.dst_thumb, item.image_urls.dst_original);
+  preparePreviewImage($("srcImage"), item.image_urls.src);
+  preparePreviewImage($("dstImage"), item.image_urls.dst);
   $("srcImage").onerror = () => $("srcImage").removeAttribute("src");
   $("dstImage").onerror = () => $("dstImage").removeAttribute("src");
   renderImagePrompt(item);
@@ -1024,14 +1021,10 @@ function renderVisualizationPage() {
   preparePreviewImage(
     $("visualizationSrcImage"),
     item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`,
-    item.image_urls?.src_thumb,
-    item.image_urls?.src_original,
   );
   preparePreviewImage(
     $("visualizationDstImage"),
     item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`,
-    item.image_urls?.dst_thumb,
-    item.image_urls?.dst_original,
   );
   $("visualizationSrcImage").onerror = () => $("visualizationSrcImage").removeAttribute("src");
   $("visualizationDstImage").onerror = () => $("visualizationDstImage").removeAttribute("src");
@@ -1153,34 +1146,14 @@ function flattenLabelRows(value, prefix = []) {
   return rows;
 }
 
-function preparePreviewImage(image, previewSrc, thumbSrc, originalSrc) {
-  const visibleSrc = thumbSrc || previewSrc;
+function preparePreviewImage(image, previewSrc) {
   image.loading = "eager";
   image.decoding = "async";
   image.fetchPriority = "high";
-  image.dataset.originalSrc = originalSrc || `${previewSrc}?original=1`;
-  if (visibleSrc && image.getAttribute("src") !== visibleSrc) {
-    image.src = visibleSrc;
+  if (image.src !== previewSrc) {
+    image.src = previewSrc;
   }
-  if (!previewSrc || previewSrc === visibleSrc) {
-    return;
-  }
-
-  const loadToken = `${Date.now()}-${Math.random()}`;
-  image.dataset.previewLoadToken = loadToken;
-  const preview = new Image();
-  preview.decoding = "async";
-  preview.src = previewSrc;
-  const swap = () => {
-    if (image.dataset.previewLoadToken === loadToken && image.getAttribute("src") !== previewSrc) {
-      image.src = previewSrc;
-    }
-  };
-  if (preview.decode) {
-    preview.decode().then(swap).catch(swap);
-  } else {
-    preview.onload = swap;
-  }
+  image.dataset.originalSrc = `${previewSrc}?original=1`;
 }
 
 function preloadStageNeighbors() {
@@ -1192,8 +1165,8 @@ function preloadNeighborItems(items, currentIndex) {
   for (let offset = 1; offset <= PRELOAD_FORWARD_PAGES; offset += 1) {
     const item = items[currentIndex + offset];
     if (!item) continue;
-    enqueuePreloadImage(item.image_urls?.src || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/src`);
-    enqueuePreloadImage(item.image_urls?.dst || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/dst`);
+    preloadImage(item.image_urls?.src || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/src`);
+    preloadImage(item.image_urls?.dst || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/dst`);
   }
 }
 
@@ -1219,38 +1192,21 @@ async function preloadVisualizationPageImages(page) {
   const data = await api(`/api/tasks/${state.taskId}/visualization-results?${params.toString()}`);
   const item = (data.results || [])[0];
   if (!item) return;
-  enqueuePreloadImage(item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
-  enqueuePreloadImage(item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
+  preloadImage(item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
+  preloadImage(item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
 }
 
-function enqueuePreloadImage(src) {
-  if (!src || preloadedImages.has(src) || preloadQueue.includes(src)) return;
-  preloadQueue.push(src);
-  runPreloadQueue();
-}
-
-function runPreloadQueue() {
-  if (activePreloadCount >= PRELOAD_CONCURRENCY) return;
-  const src = preloadQueue.shift();
-  if (!src) return;
-  activePreloadCount += 1;
-  const preload = new Image();
-  preload.loading = "eager";
-  preload.decoding = "async";
-  preload.fetchPriority = "low";
-  const finish = () => {
-    activePreloadCount = Math.max(0, activePreloadCount - 1);
-    runPreloadQueue();
-  };
-  preload.onload = finish;
-  preload.onerror = finish;
-  preload.src = src;
-  preloadedImages.set(src, preload);
+function preloadImage(src) {
+  if (!src || preloadedImages.has(src)) return;
+  const image = new Image();
+  image.loading = "eager";
+  image.decoding = "async";
+  image.src = src;
+  preloadedImages.set(src, image);
   if (preloadedImages.size > MAX_PRELOADED_IMAGES) {
     const oldestKey = preloadedImages.keys().next().value;
     preloadedImages.delete(oldestKey);
   }
-  runPreloadQueue();
 }
 
 function resultRow(label, value) {

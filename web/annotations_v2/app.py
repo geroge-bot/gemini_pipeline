@@ -23,9 +23,7 @@ from web.annotations.label_options import LABEL_OPTION_GROUPS
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_STATE_PATH = APP_DIR / "data" / "state.json"
 IMAGE_PREVIEW_MAX_EDGE = 1024
-IMAGE_THUMB_MAX_EDGE = 512
 PREVIEW_CACHE_WORKERS = 16
-STATIC_ASSET_URL_PREFIX = "/annotation-assets"
 STATE_PATH_ENV = "ANNOTATIONS_V2_STATE_PATH"
 DATA_DIR_ENV = "ANNOTATIONS_V2_DATA_DIR"
 PREVIEW_CACHE_DIR_ENV = "ANNOTATIONS_V2_PREVIEW_CACHE_DIR"
@@ -406,22 +404,6 @@ def preview_cache_key(path: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> str
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
-def preview_static_cache_key(path: Path) -> str:
-    resolved = path.resolve()
-    stat = resolved.stat()
-    raw_key = f"{resolved}|{stat.st_mtime_ns}|{stat.st_size}"
-    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
-
-
-def preview_manifest_path(cache_dir: Path) -> Path:
-    return cache_dir / "manifest.json"
-
-
-def preview_variant_filename(cache_key: str, variant: str, image_format: str) -> str:
-    suffix = ".jpg" if image_format == "JPEG" else f".{image_format.lower()}"
-    return f"{cache_key}.{variant}{suffix}"
-
-
 def cached_preview_path(cache_dir: Path, cache_key: str) -> Path | None:
     if not cache_dir.exists():
         return None
@@ -464,40 +446,6 @@ def resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIE
         image.save(tmp_path, format=image_format, quality=88, optimize=True)
         os.replace(tmp_path, cache_path)
         return cache_path.resolve(), Image.MIME.get(image_format, mimetype)
-
-
-def resized_image_variant(path: Path, cache_dir: Path, cache_key: str, variant: str, max_edge: int) -> dict[str, Any]:
-    mimetype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    with Image.open(path) as image:
-        image.load()
-        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
-        image_format = (image.format or path.suffix.lstrip(".") or "JPEG").upper()
-        if image_format == "JPG":
-            image_format = "JPEG"
-        if image_format == "JPEG" and image.mode not in ("RGB", "L"):
-            image = image.convert("RGB")
-
-        filename = preview_variant_filename(cache_key, variant, image_format)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = cache_dir / filename
-        created = False
-        if not cache_path.exists():
-            tmp_path = cache_path.with_name(f"{cache_path.name}.{threading.get_ident()}.tmp")
-            image.save(tmp_path, format=image_format, quality=88, optimize=True)
-            os.replace(tmp_path, cache_path)
-            created = True
-
-        with Image.open(cache_path) as cached_image:
-            width, height = cached_image.size
-        return {
-            "path": filename,
-            "url": "",
-            "width": width,
-            "height": height,
-            "size": cache_path.stat().st_size,
-            "mimetype": Image.MIME.get(image_format, mimetype),
-            "created": created,
-        }
 
 
 def require_task_delete_admin(payload: dict[str, Any]) -> None:
@@ -551,29 +499,6 @@ class AnnotationV2Store:
 
     def _records_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "records.json"
-
-    def _read_preview_manifest(self, task_id: str) -> dict[str, Any]:
-        return read_json_file(preview_manifest_path(self.preview_cache_dir(task_id)), {"items": {}})
-
-    def _image_urls(self, task: dict[str, Any], item: dict[str, Any]) -> dict[str, str]:
-        task_id = str(task["id"])
-        item_index = int(item["item_index"])
-        fallback_src = f"/api/tasks/{task_id}/images/{item_index}/src"
-        fallback_dst = f"/api/tasks/{task_id}/images/{item_index}/dst"
-        manifest = self._read_preview_manifest(task_id)
-        entry = manifest.get("items", {}).get(str(item_index), {})
-        src_variants = entry.get("src", {}).get("variants", {})
-        dst_variants = entry.get("dst", {}).get("variants", {})
-        src_preview = src_variants.get("preview", {}).get("url")
-        dst_preview = dst_variants.get("preview", {}).get("url")
-        return {
-            "src": src_preview or fallback_src,
-            "dst": dst_preview or fallback_dst,
-            "src_thumb": src_variants.get("thumb", {}).get("url") or src_preview or fallback_src,
-            "dst_thumb": dst_variants.get("thumb", {}).get("url") or dst_preview or fallback_dst,
-            "src_original": f"{fallback_src}?original=1",
-            "dst_original": f"{fallback_dst}?original=1",
-        }
 
     def _find_task(self, state: dict[str, Any], task_id: str) -> dict[str, Any] | None:
         return next((task for task in state.get("tasks", []) if task.get("id") == task_id), None)
@@ -1079,43 +1004,17 @@ class AnnotationV2Store:
                 progress_callback(100, "没有图片需要缓存")
             return result
 
-        def warm_one(item: dict[str, Any], field: str) -> dict[str, Any]:
+        def warm_one(item: dict[str, Any], field: str) -> str:
             raw_path = Path(str(item[field]))
             image_path = raw_path if raw_path.is_absolute() else Path(task["root_dir"]) / raw_path
             if not image_path.exists() or not image_path.is_file():
                 raise FileNotFoundError(str(image_path))
 
-            cache_key = preview_static_cache_key(image_path)
-            stat = image_path.stat()
-            generated_count = 0
-            skipped_count = 0
-            variants = {}
-            for variant, max_edge in (("thumb", IMAGE_THUMB_MAX_EDGE), ("preview", IMAGE_PREVIEW_MAX_EDGE)):
-                variant_payload = resized_image_variant(image_path, cache_dir, cache_key, variant, max_edge)
-                variant_payload["url"] = f"{STATIC_ASSET_URL_PREFIX}/{task_id}/{variant_payload['path']}"
-                created = bool(variant_payload.pop("created", False))
-                variants[variant] = variant_payload
-                if created:
-                    generated_count += 1
-                else:
-                    skipped_count += 1
+            cache_key = preview_cache_key(image_path)
+            had_cached_preview = cached_preview_path(cache_dir, cache_key) is not None
+            preview_path, _ = resized_image_file(image_path, cache_dir)
+            return "skipped" if had_cached_preview or preview_path.resolve() == image_path.resolve() else "generated"
 
-            return {
-                "source_path": str(image_path.resolve()),
-                "source_mtime_ns": stat.st_mtime_ns,
-                "source_size": stat.st_size,
-                "cache_key": cache_key,
-                "variants": variants,
-                "generated_count": generated_count,
-                "skipped_count": skipped_count,
-            }
-
-        manifest = {
-            "task_id": task_id,
-            "updated_at": utc_now(),
-            "items": {},
-            "failures": [],
-        }
         with ThreadPoolExecutor(max_workers=PREVIEW_CACHE_WORKERS) as executor:
             futures = {
                 executor.submit(warm_one, item, field): (item.get("item_index"), kind)
@@ -1124,26 +1023,26 @@ class AnnotationV2Store:
             for future in as_completed(futures):
                 item_index, kind = futures[future]
                 try:
-                    entry = future.result()
-                    result["generated_count"] += entry.pop("generated_count", 0)
-                    result["skipped_count"] += entry.pop("skipped_count", 0)
-                    manifest["items"].setdefault(str(item_index), {})[kind] = entry
+                    status = future.result()
+                    if status == "skipped":
+                        result["skipped_count"] += 1
+                    else:
+                        result["generated_count"] += 1
                 except Exception as exc:  # noqa: BLE001 - keep warming the rest of the task
                     result["failed_count"] += 1
-                    failure = {
-                        "item_index": item_index,
-                        "kind": kind,
-                        "error": str(exc),
-                    }
-                    result["failures"].append(failure)
-                    manifest["failures"].append(failure)
+                    result["failures"].append(
+                        {
+                            "item_index": item_index,
+                            "kind": kind,
+                            "error": str(exc),
+                        }
+                    )
                 finally:
                     result["processed_count"] += 1
                     if progress_callback:
                         percent = round((result["processed_count"] / total) * 100)
                         progress_callback(percent, f"正在缓存图片 {result['processed_count']} / {total}")
 
-        write_json_file(preview_manifest_path(cache_dir), manifest)
         if progress_callback:
             progress_callback(100, "图片缓存完成")
         return result
@@ -1179,31 +1078,10 @@ class AnnotationV2Store:
         self._write_state(state)
         return self._task_payload(task)
 
-    def _preview_cache_summary(self, task: dict[str, Any]) -> dict[str, Any]:
-        total_images = int(task.get("item_count") or 0) * 2
-        manifest = self._read_preview_manifest(str(task["id"]))
-        generated_images = 0
-        for item_entry in manifest.get("items", {}).values():
-            for kind in ("src", "dst"):
-                variants = item_entry.get(kind, {}).get("variants", {})
-                if variants.get("thumb") and variants.get("preview"):
-                    generated_images += 1
-        failed_images = len(manifest.get("failures", []))
-        missing_images = max(0, total_images - generated_images - failed_images)
-        return {
-            "total_images": total_images,
-            "generated_images": generated_images,
-            "failed_images": failed_images,
-            "missing_images": missing_images,
-            "cache_ready": total_images > 0 and generated_images == total_images and failed_images == 0,
-            "updated_at": manifest.get("updated_at"),
-        }
-
     def _task_payload(self, task: dict[str, Any]) -> dict[str, Any]:
         payload = deepcopy(task)
         payload["label_option_groups"] = deepcopy(LABEL_OPTION_GROUPS)
         payload["summary"] = self.summary(task["id"])
-        payload["preview_cache"] = self._preview_cache_summary(task)
         return payload
 
     def summary(self, task_id: str) -> dict[str, Any]:
@@ -1426,7 +1304,10 @@ class AnnotationV2Store:
         if stage == "label":
             payload_record["label_draft"] = {"labels": self._label_draft_labels(task, item, payload_record)}
         payload["record"] = payload_record
-        payload["image_urls"] = self._image_urls(task, item)
+        payload["image_urls"] = {
+            "src": f"/api/tasks/{task['id']}/images/{item['item_index']}/src",
+            "dst": f"/api/tasks/{task['id']}/images/{item['item_index']}/dst",
+        }
         return payload
 
     def _label_draft_labels(
@@ -1770,7 +1651,10 @@ class AnnotationV2Store:
             "dst_relative_path": image_relative_path(task.get("root_dir"), item["dst_image"]),
             "generation_prompt": item.get("generation_prompt", ""),
             "generation_prompt_json_path": item.get("generation_prompt_json_path", ""),
-            "image_urls": self._image_urls(task, item),
+            "image_urls": {
+                "src": f"/api/tasks/{task['id']}/images/{item['item_index']}/src",
+                "dst": f"/api/tasks/{task['id']}/images/{item['item_index']}/dst",
+            },
             "original_labels": deepcopy(item.get("labels", {})),
             "record": deepcopy(record),
             "stage": stage,

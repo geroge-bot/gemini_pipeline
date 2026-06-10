@@ -106,8 +106,6 @@ python -m web.annotations.app
 
 标注平台的详细说明见 [web/annotations/README.md](web/annotations/README.md)。
 
-Annotation V2 的启动、环境变量、Nginx 和预览缓存配置见 [web/annotations_v2/README.md](web/annotations_v2/README.md)。
-
 ## 图片对 JSONL 格式
 
 标注平台和部分脚本使用图片对 JSONL。每行一个 JSON 对象，至少包含：
