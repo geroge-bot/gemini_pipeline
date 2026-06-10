@@ -4,6 +4,8 @@ from flask import Flask, jsonify, request
 
 from web.annotations_v3 import assignments
 from web.annotations_v3 import datasets
+from web.annotations_v3 import records
+from web.annotations_v3 import schema
 
 
 def create_app() -> Flask:
@@ -65,6 +67,20 @@ def create_app() -> Flask:
             return jsonify(assignments.release_assignment(dataset_id, assignment_id, str(payload.get("username") or "")))
         except FileNotFoundError:
             return jsonify({"error": "assignment not found"}), 404
+
+    @app.post("/api/datasets/<dataset_id>/items/<item_id>/annotation-patch")
+    def api_annotation_patch(dataset_id: str, item_id: str):
+        try:
+            return jsonify(records.save_annotation_patch(dataset_id, item_id, request.get_json(silent=True) or {}))
+        except records.RecordServiceError as exc:
+            body = {"error": str(exc), "code": exc.code}
+            if hasattr(exc, "latest"):
+                body["latest"] = exc.latest
+            return jsonify(body), exc.status_code
+        except schema.ValidationError as exc:
+            return jsonify({"error": str(exc), "code": exc.code}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "dataset or item not found"}), 404
 
     return app
 

@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from web.annotations_v3 import datasets, storage
+from web.annotations_v3 import records
 
 
 VALID_STAGES = {"rough", "fine", "label"}
@@ -179,15 +180,6 @@ def _item_by_id(dataset_id: str) -> dict[str, dict[str, Any]]:
     return {item["item_id"]: item for item in datasets.load_items(dataset_id)}
 
 
-def _empty_annotation_context() -> dict[str, Any]:
-    return {
-        "annotation_schema_version": 1,
-        "fields": [],
-        "values": {"original": {"labels": {}, "quality": {}}, "stage_results": {}, "user_record": {}, "draft": {}},
-        "version": None,
-    }
-
-
 def assignment_response(dataset_id: str, assignment: dict[str, Any]) -> dict[str, Any]:
     ranks = datasets.item_rank_map(dataset_id)
     items_by_id = _item_by_id(dataset_id)
@@ -196,7 +188,12 @@ def assignment_response(dataset_id: str, assignment: dict[str, Any]) -> dict[str
         item = dict(items_by_id[item_id])
         item["order_rank"] = ranks[item_id]
         item["image_assets"] = {"src": {"status": "missing"}, "dst": {"status": "missing"}}
-        item["annotation_context"] = _empty_annotation_context()
+        item["annotation_context"] = records.annotation_context(
+            dataset_id,
+            item_id,
+            assignment["stage"],
+            assignment["username"],
+        )
         items.append(item)
     items.sort(key=lambda item: item["order_rank"])
     next_index = assignment["block_index"] + 1
