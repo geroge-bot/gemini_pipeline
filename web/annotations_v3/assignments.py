@@ -7,6 +7,7 @@ from typing import Any
 
 from web.annotations_v3 import assets, datasets, sampling, storage
 from web.annotations_v3 import records
+from web.annotations_v3.transactions import dataset_transaction
 
 
 VALID_STAGES = {"rough", "fine", "label"}
@@ -73,6 +74,38 @@ def _snapshots_path(dataset_id: str):
 
 def _load_snapshots(dataset_id: str) -> dict[str, Any]:
     return storage.read_json(_snapshots_path(dataset_id), {"version": 1, "snapshots": []})
+
+
+def _snapshot_for_current_candidates(
+    dataset_id: str,
+    stage: str,
+    block_size: int,
+    force_refresh: bool,
+    doc: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    stage_snapshots = [snap for snap in doc["snapshots"] if snap.get("stage") == stage]
+    item_ids = stage_candidate_item_ids(dataset_id, stage)
+    current_hash = candidate_hash(item_ids)
+    sample_version = sampling.current_sample_version(_records(dataset_id)) if stage == "label" else None
+    if stage_snapshots and not force_refresh:
+        latest = stage_snapshots[-1]
+        if stage != "label" or latest.get("sample_version") == sample_version:
+            if latest.get("candidate_hash") == current_hash or _snapshot_has_remaining_claimable_work(dataset_id, latest):
+                return latest, False
+    snapshot = {
+        "snapshot_id": f"{stage}-snap-{len(stage_snapshots) + 1:04d}",
+        "dataset_id": dataset_id,
+        "stage": stage,
+        "order_version": 1,
+        "sample_version": sample_version,
+        "candidate_hash": current_hash,
+        "created_at": utc_now(),
+        "item_count": len(item_ids),
+        "item_ids": item_ids,
+        "block_size": block_size,
+    }
+    doc["snapshots"].append(snapshot)
+    return snapshot, True
 
 
 def _completed_or_active_block_indexes(doc: dict[str, Any], stage: str, snapshot_id: str) -> set[int]:
@@ -145,29 +178,9 @@ def get_or_create_candidate_snapshot(
     force_refresh: bool = False,
 ) -> dict[str, Any]:
     doc = _load_snapshots(dataset_id)
-    stage_snapshots = [snap for snap in doc["snapshots"] if snap.get("stage") == stage]
-    item_ids = stage_candidate_item_ids(dataset_id, stage)
-    current_hash = candidate_hash(item_ids)
-    sample_version = sampling.current_sample_version(_records(dataset_id)) if stage == "label" else None
-    if stage_snapshots and not force_refresh:
-        latest = stage_snapshots[-1]
-        if stage != "label" or latest.get("sample_version") == sample_version:
-            if latest.get("candidate_hash") == current_hash or _snapshot_has_remaining_claimable_work(dataset_id, latest):
-                return latest
-    snapshot = {
-        "snapshot_id": f"{stage}-snap-{len(stage_snapshots) + 1:04d}",
-        "dataset_id": dataset_id,
-        "stage": stage,
-        "order_version": 1,
-        "sample_version": sample_version,
-        "candidate_hash": current_hash,
-        "created_at": utc_now(),
-        "item_count": len(item_ids),
-        "item_ids": item_ids,
-        "block_size": block_size,
-    }
-    doc["snapshots"].append(snapshot)
-    storage.write_json_atomic(_snapshots_path(dataset_id), doc)
+    snapshot, changed = _snapshot_for_current_candidates(dataset_id, stage, block_size, force_refresh, doc)
+    if changed:
+        storage.write_json_atomic(_snapshots_path(dataset_id), doc)
     return snapshot
 
 
@@ -216,12 +229,21 @@ def claim_assignment(dataset_id: str, stage: str, username: str) -> dict[str, An
     username = username.strip()
     if not username:
         raise ValueError("username 不能为空")
-    with storage.dataset_lock(dataset_id):
-        snapshot = get_or_create_candidate_snapshot(dataset_id, stage)
+    response: dict[str, Any] | None = None
+    with dataset_transaction(dataset_id) as tx:
+        snapshots_doc = _load_snapshots(dataset_id)
+        snapshot, snapshot_changed = _snapshot_for_current_candidates(
+            dataset_id,
+            stage,
+            datasets.DEFAULT_BLOCK_SIZE,
+            False,
+            snapshots_doc,
+        )
         doc = _assignments_doc(dataset_id)
         active = _active_assignment_for_user(doc, stage, username)
         if active is not None:
-            return assignment_response(dataset_id, active)
+            response = assignment_response(dataset_id, active)
+            return response
         block_size = int(snapshot["block_size"])
         item_ids = snapshot["item_ids"]
         blocked_indexes = _completed_or_active_block_indexes(doc, stage, snapshot["snapshot_id"])
@@ -257,8 +279,11 @@ def claim_assignment(dataset_id: str, stage: str, username: str) -> dict[str, An
                 "skipped_items": skipped_items,
             }
             doc["blocks"].append(assignment)
-            _save_assignments(dataset_id, doc)
-            return assignment_response(dataset_id, assignment)
+            if snapshot_changed:
+                tx.stage_json(_snapshots_path(dataset_id), snapshots_doc)
+            tx.stage_json(_assignment_path(dataset_id), doc)
+            response = assignment_response(dataset_id, assignment)
+            return response
     raise ValueError("没有可领取的 assignment block")
 
 

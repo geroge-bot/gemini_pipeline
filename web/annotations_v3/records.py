@@ -8,6 +8,7 @@ from copy import deepcopy
 from typing import Any
 
 from web.annotations_v3 import datasets, schema, storage
+from web.annotations_v3.transactions import dataset_transaction
 
 
 def utc_now() -> float:
@@ -128,7 +129,8 @@ def _stage_gate_open(records_doc: dict[str, Any], item_id: str, stage: str) -> b
 
 
 def save_annotation_patch(dataset_id: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    with storage.dataset_lock(dataset_id):
+    result: dict[str, Any] | None = None
+    with dataset_transaction(dataset_id) as tx:
         stage = str(payload.get("stage") or "")
         username = str(payload.get("username") or "")
         assignment_id = str(payload.get("assignment_id") or "")
@@ -179,10 +181,12 @@ def save_annotation_patch(dataset_id: str, item_id: str, payload: dict[str, Any]
                 completed += 1
         assignment["completed_count"] = completed
         assignment["status"] = "completed" if completed >= assignment.get("total_count", len(assignment.get("item_ids", []))) else "claimed"
-        save_records(dataset_id, records_doc)
-        _save_assignments(dataset_id, assignments_doc)
-        return {
+        tx.stage_json(storage.dataset_dir(dataset_id) / "records.json", records_doc)
+        tx.stage_json(storage.dataset_dir(dataset_id) / "assignments.json", assignments_doc)
+        result = {
             "record": record,
             "assignment": {key: value for key, value in assignment.items() if key != "item_ids"},
-            "annotation_context": annotation_context(dataset_id, item_id, stage, username),
         }
+    assert result is not None
+    result["annotation_context"] = annotation_context(dataset_id, item_id, stage, username)
+    return result
