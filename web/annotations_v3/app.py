@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
+from web.annotations_v3 import admin
 from web.annotations_v3 import assets
 from web.annotations_v3 import assignments
 from web.annotations_v3 import datasets
+from web.annotations_v3 import export
 from web.annotations_v3 import imports
 from web.annotations_v3 import records
 from web.annotations_v3 import sampling
@@ -85,6 +87,18 @@ def create_app() -> Flask:
             return jsonify(datasets.get_order_manifest(dataset_id))
         except FileNotFoundError:
             return jsonify({"error": "dataset not found"}), 404
+
+    @app.get("/api/datasets/<dataset_id>/download")
+    def api_download_dataset(dataset_id: str):
+        try:
+            body = export.export_jsonl(dataset_id, request.args.get("include_invalidated") == "true")
+        except FileNotFoundError:
+            return jsonify({"error": "dataset not found"}), 404
+        return Response(
+            body,
+            mimetype="application/x-ndjson",
+            headers={"Content-Disposition": f"attachment; filename={dataset_id}.jsonl"},
+        )
 
     @app.post("/api/datasets/<dataset_id>/assignments/claim")
     def api_claim_assignment(dataset_id: str):
@@ -222,6 +236,32 @@ def create_app() -> Flask:
         except FileNotFoundError:
             return jsonify({"error": "import not found"}), 404
         return jsonify({"errors": report.get("errors", [])})
+
+    @app.post("/api/datasets/<dataset_id>/items/<item_id>/invalidate")
+    def api_invalidate_record(dataset_id: str, item_id: str):
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                admin.invalidate_record(
+                    dataset_id,
+                    item_id,
+                    payload.get("stage", ""),
+                    payload.get("username", ""),
+                    payload.get("reason", ""),
+                )
+            )
+        except FileNotFoundError:
+            return jsonify({"error": "record not found"}), 404
+        except admin.AdminError as exc:
+            return jsonify({"error": str(exc), "code": exc.code}), 409
+
+    @app.post("/api/datasets/<dataset_id>/candidate-snapshots/refresh")
+    def api_refresh_snapshot(dataset_id: str):
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(admin.refresh_candidate_snapshot(dataset_id, payload.get("stage", "")))
+        except admin.AdminError as exc:
+            return jsonify({"error": str(exc), "code": exc.code}), 409
 
     @app.post("/api/datasets/<dataset_id>/assets/jobs")
     def api_create_asset_job(dataset_id: str):
