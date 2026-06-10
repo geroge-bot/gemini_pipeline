@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ dataset.name }} - Annotations V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="dataset">
+  <header class="topbar">
+    <div>
+      <h1>{{ dataset.name }}</h1>
+      <p>{{ dataset.item_count }} items · {{ dataset.order.mode }}{% if dataset.order.seed %} · {{ dataset.order.seed }}{% endif %}</p>
+    </div>
+    <a class="buttonLike ghost" href="/">返回任务</a>
+  </header>
+  <main data-page="dataset" data-dataset-id="{{ dataset.dataset_id }}" class="pageShell">
+    <section class="panel datasetSummary">
+      <h2>数据集详情</h2>
+      <dl>
+        <div><dt>ID</dt><dd>{{ dataset.dataset_id }}</dd></div>
+        <div><dt>数量</dt><dd>{{ dataset.item_count }}</dd></div>
+        <div><dt>顺序</dt><dd>{{ dataset.order.mode }}</dd></div>
+        <div><dt>Seed</dt><dd>{{ dataset.order.seed or "无" }}</dd></div>
+      </dl>
+    </section>
+    <section class="panel">
+      <div class="sectionHead">
+        <h2>阶段入口</h2>
+      </div>
+      <div class="stageLinks">
+        <a class="buttonLike" href="/datasets/{{ dataset.dataset_id }}/rate?stage=rough">粗筛</a>
+        <a class="buttonLike" href="/datasets/{{ dataset.dataset_id }}/rate?stage=fine">精筛</a>
+        <a class="buttonLike" href="/datasets/{{ dataset.dataset_id }}/rate?stage=label">标签</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

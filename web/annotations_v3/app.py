@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 from web.annotations_v3 import assets
 from web.annotations_v3 import assignments
@@ -15,6 +15,26 @@ def create_app() -> Flask:
     @app.get("/api/datasets")
     def api_list_datasets():
         return jsonify({"datasets": datasets.list_datasets()})
+
+    @app.get("/")
+    def page_index():
+        return render_template("index.html", datasets=datasets.list_datasets())
+
+    @app.get("/datasets/<dataset_id>")
+    def page_dataset(dataset_id: str):
+        try:
+            return render_template("dataset.html", dataset=datasets.get_dataset(dataset_id))
+        except FileNotFoundError:
+            return "dataset not found", 404
+
+    @app.get("/datasets/<dataset_id>/rate")
+    def page_rate(dataset_id: str):
+        stage = request.args.get("stage", "rough")
+        try:
+            dataset_doc = datasets.get_dataset(dataset_id)
+        except FileNotFoundError:
+            return "dataset not found", 404
+        return render_template("rate.html", dataset=dataset_doc, stage=stage)
 
     @app.post("/api/datasets")
     def api_create_dataset():
