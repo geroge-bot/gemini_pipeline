@@ -538,6 +538,12 @@ class AnnotationV2Store:
     def _records_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "records.json"
 
+    def _records_dir_path(self, task: dict[str, Any]) -> Path:
+        return Path(task["data_dir"]) / "records"
+
+    def _record_item_path(self, task: dict[str, Any], item_index: int | str) -> Path:
+        return self._records_dir_path(task) / f"{int(item_index)}.json"
+
     def _find_task(self, state: dict[str, Any], task_id: str) -> dict[str, Any] | None:
         return next((task for task in state.get("tasks", []) if task.get("id") == task_id), None)
 
@@ -613,18 +619,54 @@ class AnnotationV2Store:
         write_json_file(self._items_path(task), items)
 
     def _read_records(self, task: dict[str, Any]) -> dict[str, Any]:
-        records = read_json_file(self._records_path(task), {})
-        return records if isinstance(records, dict) else {}
+        legacy_records = read_json_file(self._records_path(task), {})
+        records = deepcopy(legacy_records) if isinstance(legacy_records, dict) else {}
+        records_dir = self._records_dir_path(task)
+        if not records_dir.exists() or not records_dir.is_dir():
+            return records
+        for path in sorted(records_dir.glob("*.json"), key=lambda item: item.stem):
+            try:
+                item_index = str(int(path.stem))
+            except ValueError:
+                continue
+            record = read_json_file(path, {})
+            if isinstance(record, dict):
+                records[item_index] = record
+        return records
+
+    def _read_record(self, task: dict[str, Any], item_index: int) -> dict[str, Any]:
+        key = str(int(item_index))
+        item_record_path = self._record_item_path(task, int(item_index))
+        if item_record_path.exists():
+            item_record = read_json_file(item_record_path, {})
+            return item_record if isinstance(item_record, dict) else {}
+        legacy_records = read_json_file(self._records_path(task), {})
+        legacy_record = legacy_records.get(key, {}) if isinstance(legacy_records, dict) else {}
+        return deepcopy(legacy_record) if isinstance(legacy_record, dict) else {}
 
     def _write_records(self, task: dict[str, Any], records: dict[str, Any]) -> None:
-        write_json_file(self._records_path(task), records)
+        for key, record in records.items():
+            if isinstance(record, dict):
+                self._write_record(task, int(key), record)
+
+    def _write_record(self, task: dict[str, Any], item_index: int, record: dict[str, Any]) -> None:
+        write_json_file(self._record_item_path(task, int(item_index)), record)
 
     def _update_records(self, task: dict[str, Any], mutate) -> Any:
-        records_path = self._records_path(task)
+        records_path = self._records_dir_path(task) / ".bulk-update.lock"
         with json_write_lock(records_path):
             records = self._read_records(task)
             result = mutate(records)
             self._write_records(task, records)
+            return result
+
+    def _update_record(self, task: dict[str, Any], item_index: int, mutate) -> Any:
+        item_index = int(item_index)
+        record_path = self._record_item_path(task, item_index)
+        with json_write_lock(record_path):
+            item_record = self._read_record(task, item_index)
+            result = mutate(item_record)
+            self._write_record(task, item_index, item_record)
             return result
 
     def _stage_target(self, task: dict[str, Any], stage: str) -> int:
@@ -1021,7 +1063,7 @@ class AnnotationV2Store:
         }
         self._apply_generation_prompts(task, items)
         write_json_file(self._items_path(task), items)
-        write_json_file(self._records_path(task), {})
+        self._records_dir_path(task).mkdir(parents=True, exist_ok=True)
         state = self._read_state()
         state.setdefault("tasks", []).append(task)
         self._write_state(state)
@@ -1280,7 +1322,7 @@ class AnnotationV2Store:
         username = str(username or "").strip()
         include_history = bool(include_history and username)
         if stage == "label" and reserve_open_label_item and username:
-            records_path = self._records_path(task)
+            records_path = self._records_dir_path(task) / ".bulk-update.lock"
             with json_write_lock(records_path):
                 records = self._read_records(task)
                 items = self._read_items(task)
@@ -1452,30 +1494,27 @@ class AnnotationV2Store:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
 
-        def mutate(records: dict[str, Any]) -> dict[str, Any]:
-            item_record = records.setdefault(str(int(item_index)), {})
+        def mutate(item_record: dict[str, Any]) -> dict[str, Any]:
             return self._upsert_screen_annotation(task, item_record, "rough", payload)
 
-        return self._update_records(task, mutate)
+        return self._update_record(task, int(item_index), mutate)
 
     def save_fine(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
 
-        def mutate(records: dict[str, Any]) -> dict[str, Any]:
-            item_record = records.setdefault(str(int(item_index)), {})
+        def mutate(item_record: dict[str, Any]) -> dict[str, Any]:
             if not self._stage_complete(task, item_record, "rough") or not self._rough_passes(task, item_record.get("rough")):
                 raise ValueError("精筛前必须先通过粗筛")
             return self._upsert_screen_annotation(task, item_record, "fine", payload)
 
-        return self._update_records(task, mutate)
+        return self._update_record(task, int(item_index), mutate)
 
     def save_label(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
         self._read_item(task, int(item_index))
 
-        def mutate(records: dict[str, Any]) -> dict[str, Any]:
-            item_record = records.setdefault(str(int(item_index)), {})
+        def mutate(item_record: dict[str, Any]) -> dict[str, Any]:
             if not item_record.get("sampled"):
                 raise ValueError("标签纠错前必须先采样")
             username = str(payload.get("username") or "").strip()
@@ -1496,7 +1535,7 @@ class AnnotationV2Store:
             item_record.pop("label_claim", None)
             return deepcopy(item_record["label"])
 
-        return self._update_records(task, mutate)
+        return self._update_record(task, int(item_index), mutate)
 
     def _screen_record(self, payload: dict[str, Any], allow_empty_issue: bool) -> dict[str, Any]:
         username = normalized_import_username(payload)

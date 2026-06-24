@@ -120,6 +120,90 @@ def test_v2_screening_record_updates_are_safe_when_concurrent(monkeypatch):
     assert records["1"]["rough"]["username"] == "bob"
 
 
+def test_v2_records_are_saved_as_per_item_files():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    store.save_rough(task["id"], 1, {"username": "bob", "mos": 4, "has_defect": False})
+
+    records_dir = Path(task["data_dir"]) / "records"
+    assert records_dir.is_dir()
+    assert json.loads((records_dir / "0.json").read_text(encoding="utf-8"))["rough"]["username"] == "alice"
+    assert json.loads((records_dir / "1.json").read_text(encoding="utf-8"))["rough"]["username"] == "bob"
+    assert not (Path(task["data_dir"]) / "records.json").exists()
+
+
+def test_v2_reads_legacy_records_json_and_new_item_records_together():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    data_dir = Path(task["data_dir"])
+    write_json(
+        data_dir / "records.json",
+        {
+            "0": {"rough": {"username": "legacy", "mos": 3}},
+            "1": {"rough": {"username": "legacy", "mos": 4}},
+        },
+    )
+    write_json(data_dir / "records" / "0.json", {"rough": {"username": "new", "mos": 5}})
+
+    records = store._read_records(store._require_task(task["id"]))
+
+    assert records["0"]["rough"]["username"] == "new"
+    assert records["1"]["rough"]["username"] == "legacy"
+
+
+def test_v2_item_record_read_skips_legacy_records_when_shard_exists(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    data_dir = Path(task["data_dir"])
+    write_json(data_dir / "records.json", {"0": {"rough": {"username": "legacy", "mos": 3}}})
+    write_json(data_dir / "records" / "0.json", {"rough": {"username": "new", "mos": 5}})
+    original_read_json_file = annotations_v2_app.read_json_file
+    legacy_reads = 0
+
+    def counting_read_json_file(path, default):
+        nonlocal legacy_reads
+        if Path(path).name == "records.json":
+            legacy_reads += 1
+        return original_read_json_file(path, default)
+
+    monkeypatch.setattr(annotations_v2_app, "read_json_file", counting_read_json_file)
+
+    record = store._read_record(store._require_task(task["id"]), 0)
+
+    assert record["rough"]["username"] == "new"
+    assert legacy_reads == 0
+
+
 def make_test_image(path, size):
     from PIL import Image
 
@@ -230,7 +314,7 @@ def test_v2_task_data_dir_can_be_configured_separately_from_state_path():
 
     assert Path(task["data_dir"]).parent == data_root
     assert (data_root / task["id"] / "items.json").exists()
-    assert (data_root / task["id"] / "records.json").exists()
+    assert (data_root / task["id"] / "records").is_dir()
     assert not (tmp_path / "state" / "tasks" / task["id"]).exists()
 
 
@@ -674,7 +758,7 @@ def test_v2_delete_task_only_unregisters_task_and_preserves_data_dir():
     task = store.create_task({"name": "delete me", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
     task_data_dir = Path(task["data_dir"])
     items_path = task_data_dir / "items.json"
-    records_path = task_data_dir / "records.json"
+    records_dir = task_data_dir / "records"
 
     deleted = store.delete_task(task["id"])
 
@@ -682,7 +766,7 @@ def test_v2_delete_task_only_unregisters_task_and_preserves_data_dir():
     assert store.list_tasks() == []
     assert task_data_dir.exists()
     assert items_path.exists()
-    assert records_path.exists()
+    assert records_dir.exists()
 
 
 def test_v2_stage_gates_sampling_label_correction_and_export():
