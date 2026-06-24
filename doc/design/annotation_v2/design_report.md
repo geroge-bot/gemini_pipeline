@@ -88,7 +88,8 @@ web/annotations_v2/
   app.py
   data/state.json
   data/tasks/<task_id>/items.json
-  data/tasks/<task_id>/records.json
+  data/tasks/<task_id>/records/<item_index>.json
+  STORAGE.md
   templates/index.html
   static/app.js
   static/styles.css
@@ -153,36 +154,34 @@ Flask 路由只负责参数校验、调用 store、返回 JSON 或页面。
 ]
 ```
 
-`records.json` 保存阶段记录：
+`records/<item_index>.json` 保存单条数据的阶段记录。旧任务中的 `records.json` 仍会作为兼容基线读取；如果同一条数据存在新的分片文件，以分片文件为准。
 
 ```json
 {
-  "0": {
-    "rough": {
-      "username": "alice",
-      "mos": 4,
-      "has_defect": false,
-      "primary_issue": "",
-      "issues": [],
-      "note": "",
-      "updated_at": 1780713600.0
-    },
-    "fine": {
-      "username": "bob",
-      "mos": 5,
-      "has_defect": false,
-      "issues": [],
-      "note": "",
-      "updated_at": 1780713700.0
-    },
-    "label": {
-      "username": "carol",
-      "labels": {"输入图": {"菜品种类": "西餐"}},
-      "updated_at": 1780713800.0
-    },
-    "sampled": true,
-    "sample_bucket": "输入图/菜品种类=中餐"
-  }
+  "rough": {
+    "username": "alice",
+    "mos": 4,
+    "has_defect": false,
+    "primary_issue": "",
+    "issues": [],
+    "note": "",
+    "updated_at": 1780713600.0
+  },
+  "fine": {
+    "username": "bob",
+    "mos": 5,
+    "has_defect": false,
+    "issues": [],
+    "note": "",
+    "updated_at": 1780713700.0
+  },
+  "label": {
+    "username": "carol",
+    "labels": {"输入图": {"菜品种类": "西餐"}},
+    "updated_at": 1780713800.0
+  },
+  "sampled": true,
+  "sample_bucket": "输入图/菜品种类=中餐"
 }
 ```
 
@@ -254,4 +253,4 @@ v2 首页是工作台，不做营销页。
 
 - 确认 v2 阶段模型稳定后，可迁移旧版预览缓存和 Excel 导出。
 - 多人协作可在 `stage_records` 外增加 `assignments`，按阶段而不是按全任务分片。
-- 复杂统计可直接基于 `summary` 和 `records.json` 扩展，不需要改变导入模型。
+- 复杂统计可直接基于 `summary` 和合并后的 records 视图扩展，不需要改变导入模型。

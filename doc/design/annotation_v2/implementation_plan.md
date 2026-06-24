@@ -200,7 +200,7 @@ Implement the following concrete behavior in `web/annotations_v2/app.py`:
 
 - `load_jsonl(path)` validates non-empty JSONL rows with `src_image` and `dst_image`.
 - `read_image_labels(root_dir, label_dir, image_path)` reads same-name JSON labels.
-- `create_task(payload)` writes task metadata, `items.json`, and an empty `records.json`.
+- `create_task(payload)` writes task metadata, `items.json`, and creates a `records/` directory for per-item record files.
 - `list_stage_items(task_id, stage)` returns rough, fine, or label queues based on design rules.
 - `save_rough`, `save_fine`, and `save_label` validate gates and persist records.
 - `sample(task_id, payload)` selects from fine-passed candidates by selected label path buckets.
