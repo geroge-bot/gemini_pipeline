@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -97,6 +99,44 @@ def test_import_rough_jsonl_apply_writes_v2_rough_record_and_summary_stale():
     assert record["rough_annotations"][0]["mos"] == 3
     summary = json.loads((Path(task["data_dir"]) / "summary.json").read_text(encoding="utf-8"))
     assert summary["stale"] is True
+
+
+def test_import_rough_jsonl_matches_task_name_after_trimming_whitespace():
+    from scripts.import_annotations_v2_rough_jsonl import import_rough_jsonl
+
+    tmp_path = make_workspace_tmp()
+    store, task = make_v2_task(tmp_path)
+    import_jsonl = tmp_path / "import.jsonl"
+    write_jsonl(
+        import_jsonl,
+        [
+            {"原图": "ori/a.jpg", "生成图": "gen/a.jpg", "MOS评分": "3", "是否有质量问题": False, "评分人": "alice"},
+        ],
+    )
+
+    result = import_rough_jsonl(str(import_jsonl), " rough target ", state_path=tmp_path / "state.json", apply=True)
+
+    assert result["matched"] == 1
+    assert result["imported"] == 1
+    record = store._read_record(store._require_task(task["id"]), 0)
+    assert record["rough"]["username"] == "alice"
+
+
+def test_import_rough_jsonl_missing_task_error_lists_available_tasks():
+    from scripts.import_annotations_v2_rough_jsonl import import_rough_jsonl
+
+    tmp_path = make_workspace_tmp()
+    make_v2_task(tmp_path)
+    import_jsonl = tmp_path / "import.jsonl"
+    write_jsonl(import_jsonl, [])
+
+    with pytest.raises(ValueError) as exc_info:
+        import_rough_jsonl(str(import_jsonl), "missing task", state_path=tmp_path / "state.json", apply=False)
+
+    message = str(exc_info.value)
+    assert "missing task" in message
+    assert str(tmp_path / "state.json") in message
+    assert "rough target" in message
 
 
 def test_import_rough_jsonl_normalizes_absolute_paths_and_string_booleans():

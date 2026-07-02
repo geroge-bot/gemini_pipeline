@@ -322,7 +322,21 @@ python scripts/import_annotations_v2_rough_jsonl.py \
   --apply
 ```
 
-脚本按 `原图 + 生成图` 与任务 `items.json` 的 `src_image + dst_image` 匹配，同时兼容绝对路径、Windows 反斜杠和相对 `root_dir` 的路径。写入时调用 `AnnotationV2Store.save_rough()`，因此会沿用粗筛人数上限、同用户覆盖、聚合结果和 summary stale 标记等现有规则。达到粗筛人数上限的行会跳过并计入 `capacity_skipped`。
+如果不确定脚本读取到了哪个任务列表，可以先运行：
+
+```bash
+python scripts/import_annotations_v2_rough_jsonl.py --list-tasks
+```
+
+远程部署使用非默认数据路径时，需要显式传入对应的 `state.json`：
+
+```bash
+python scripts/import_annotations_v2_rough_jsonl.py \
+  --state-path /path/to/web/annotations_v2/data/state.json \
+  --list-tasks
+```
+
+脚本按 `原图 + 生成图` 与任务 `items.json` 的 `src_image + dst_image` 匹配，同时兼容绝对路径、Windows 反斜杠和相对 `root_dir` 的路径。`--task` 支持任务 id 或任务名，匹配时会忽略首尾空格；任务名包含空格时，命令行中需要用引号包起来。写入时调用 `AnnotationV2Store.save_rough()`，因此会沿用粗筛人数上限、同用户覆盖、聚合结果和 summary stale 标记等现有规则。达到粗筛人数上限的行会跳过并计入 `capacity_skipped`。
 
 ## 9. 导出 JSONL
 

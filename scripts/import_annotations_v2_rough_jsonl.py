@@ -26,6 +26,20 @@ DEFAULT_STATE_PATH = Path("web/annotations_v2/data/state.json")
 REQUIRED_FIELDS = ("原图", "生成图", "MOS评分", "是否有质量问题", "评分人")
 
 
+def normalize_task_ref(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def task_display_name(task: dict[str, Any]) -> str:
+    return f"{task.get('name', '')} ({task.get('id', '')})"
+
+
+def format_available_tasks(tasks: list[dict[str, Any]]) -> str:
+    if not tasks:
+        return "当前 state 中没有注册任务"
+    return "\n".join(f"- {task_display_name(task)}" for task in tasks)
+
+
 def normalize_image_path(value: Any, root_dir: Any = "") -> str:
     raw = str(value or "").replace("\\", "/").strip().strip('"').strip("'")
     raw = raw.lstrip("./")
@@ -52,17 +66,34 @@ def image_pair_keys(src_path: Any, dst_path: Any, root_dir: Any = "") -> set[tup
 
 
 def resolve_task(store: AnnotationV2Store, task_ref: str) -> dict[str, Any]:
+    normalized_ref = normalize_task_ref(task_ref)
     state = store._read_state()
+    tasks = state.get("tasks", [])
     matches = [
         task
-        for task in state.get("tasks", [])
-        if str(task.get("id")) == str(task_ref) or str(task.get("name")) == str(task_ref)
+        for task in tasks
+        if normalize_task_ref(task.get("id")) == normalized_ref or normalize_task_ref(task.get("name")) == normalized_ref
     ]
     if not matches:
-        raise ValueError(f"找不到 annotations_v2 任务: {task_ref}")
+        raise ValueError(
+            "找不到 annotations_v2 任务: "
+            f"{task_ref}\n"
+            f"读取的 state: {store.state_path}\n"
+            "可用任务:\n"
+            f"{format_available_tasks(tasks)}"
+        )
     if len(matches) > 1:
-        raise ValueError(f"任务名称不唯一，请改用 task id: {task_ref}")
+        raise ValueError(
+            "任务名称不唯一，请改用 task id: "
+            f"{task_ref}\n"
+            f"{format_available_tasks(matches)}"
+        )
     return matches[0]
+
+
+def list_tasks(state_path: str | os.PathLike[str] = DEFAULT_STATE_PATH) -> list[dict[str, Any]]:
+    store = AnnotationV2Store(state_path)
+    return store._read_state().get("tasks", [])
 
 
 def build_task_pair_index(
@@ -241,11 +272,18 @@ def import_rough_jsonl(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import rough-screening JSONL rows into an annotations_v2 task.")
-    parser.add_argument("--jsonl", required=True, help="Input JSONL path.")
-    parser.add_argument("--task", required=True, help="Target annotations_v2 task id or unique name.")
+    parser.add_argument("--jsonl", help="Input JSONL path.")
+    parser.add_argument("--task", help="Target annotations_v2 task id or unique name.")
     parser.add_argument("--state-path", default=str(DEFAULT_STATE_PATH), help="Path to annotations_v2 state.json.")
     parser.add_argument("--apply", action="store_true", help="Write records. Defaults to dry-run.")
+    parser.add_argument("--list-tasks", action="store_true", help="List registered tasks from state.json and exit.")
     args = parser.parse_args()
+
+    if args.list_tasks:
+        print(format_available_tasks(list_tasks(args.state_path)))
+        return
+    if not args.jsonl or not args.task:
+        parser.error("--jsonl and --task are required unless --list-tasks is used")
 
     result = import_rough_jsonl(args.jsonl, args.task, state_path=args.state_path, apply=args.apply)
     print(json.dumps(result, ensure_ascii=False, indent=2))
