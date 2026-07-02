@@ -295,6 +295,35 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 - 更新了阶段记录的 record 数。
 - 当前任务 summary。
 
+### 8.3 粗筛 JSONL 批量导入脚本
+
+`scripts/import_annotations_v2_rough_jsonl.py` 用于把外部评分 JSONL 导入为已注册 annotations_v2 任务的粗筛结果。输入每行需要包含：
+
+- `原图`：原图相对路径或相对任务 `root_dir` 的可归一化路径。
+- `生成图`：生成图相对路径或相对任务 `root_dir` 的可归一化路径。
+- `MOS评分`：字符串或数字形式的 1-5 分。
+- `是否有质量问题`：bool，或 `true/false`、`1/0`、`是/否`、`有/无` 字符串。
+- `评分人`：写入粗筛记录的用户名。
+
+脚本默认 dry-run，只输出匹配、未匹配、非法行和容量跳过统计，不写入记录：
+
+```bash
+python scripts/import_annotations_v2_rough_jsonl.py \
+  --jsonl /path/to/ratings.jsonl \
+  --task "已注册任务名或task id"
+```
+
+确认统计无误后加 `--apply` 写入：
+
+```bash
+python scripts/import_annotations_v2_rough_jsonl.py \
+  --jsonl /path/to/ratings.jsonl \
+  --task "已注册任务名或task id" \
+  --apply
+```
+
+脚本按 `原图 + 生成图` 与任务 `items.json` 的 `src_image + dst_image` 匹配，同时兼容绝对路径、Windows 反斜杠和相对 `root_dir` 的路径。写入时调用 `AnnotationV2Store.save_rough()`，因此会沿用粗筛人数上限、同用户覆盖、聚合结果和 summary stale 标记等现有规则。达到粗筛人数上限的行会跳过并计入 `capacity_skipped`。
+
 ## 9. 导出 JSONL
 
 任务卡片“导出”会下载 `<任务名>_annotations_v2.jsonl`。每行包含：
