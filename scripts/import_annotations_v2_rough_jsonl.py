@@ -91,7 +91,7 @@ def resolve_task(store: AnnotationV2Store, task_ref: str) -> dict[str, Any]:
     return matches[0]
 
 
-def list_tasks(state_path: str | os.PathLike[str] = DEFAULT_STATE_PATH) -> list[dict[str, Any]]:
+def list_tasks(state_path: str | os.PathLike[str] | None = None) -> list[dict[str, Any]]:
     store = AnnotationV2Store(state_path)
     return store._read_state().get("tasks", [])
 
@@ -206,7 +206,7 @@ def import_rough_jsonl(
     jsonl_path: str | os.PathLike[str],
     task_ref: str,
     *,
-    state_path: str | os.PathLike[str] = DEFAULT_STATE_PATH,
+    state_path: str | os.PathLike[str] | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
     store = AnnotationV2Store(state_path)
@@ -274,7 +274,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Import rough-screening JSONL rows into an annotations_v2 task.")
     parser.add_argument("--jsonl", help="Input JSONL path.")
     parser.add_argument("--task", help="Target annotations_v2 task id or unique name.")
-    parser.add_argument("--state-path", default=str(DEFAULT_STATE_PATH), help="Path to annotations_v2 state.json.")
+    parser.add_argument(
+        "--state-path",
+        default=None,
+        help=(
+            "Path to annotations_v2 state.json. Defaults to ANNOTATIONS_V2_STATE_PATH, "
+            f"then {DEFAULT_STATE_PATH}."
+        ),
+    )
     parser.add_argument("--apply", action="store_true", help="Write records. Defaults to dry-run.")
     parser.add_argument("--list-tasks", action="store_true", help="List registered tasks from state.json and exit.")
     args = parser.parse_args()

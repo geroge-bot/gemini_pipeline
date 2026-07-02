@@ -139,6 +139,30 @@ def test_import_rough_jsonl_missing_task_error_lists_available_tasks():
     assert "rough target" in message
 
 
+def test_import_rough_jsonl_uses_state_path_environment_by_default(monkeypatch):
+    from scripts.import_annotations_v2_rough_jsonl import import_rough_jsonl, list_tasks
+
+    tmp_path = make_workspace_tmp()
+    store, task = make_v2_task(tmp_path)
+    import_jsonl = tmp_path / "import.jsonl"
+    write_jsonl(
+        import_jsonl,
+        [
+            {"原图": "ori/a.jpg", "生成图": "gen/a.jpg", "MOS评分": "4", "是否有质量问题": False, "评分人": "env-user"},
+        ],
+    )
+    monkeypatch.setenv("ANNOTATIONS_V2_STATE_PATH", str(tmp_path / "state.json"))
+
+    tasks = list_tasks()
+    result = import_rough_jsonl(str(import_jsonl), task["id"], apply=True)
+
+    assert [item["id"] for item in tasks] == [task["id"]]
+    assert result["matched"] == 1
+    assert result["imported"] == 1
+    record = store._read_record(store._require_task(task["id"]), 0)
+    assert record["rough"]["username"] == "env-user"
+
+
 def test_import_rough_jsonl_normalizes_absolute_paths_and_string_booleans():
     from scripts.import_annotations_v2_rough_jsonl import import_rough_jsonl
 

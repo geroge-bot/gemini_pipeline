@@ -328,7 +328,15 @@ python scripts/import_annotations_v2_rough_jsonl.py \
 python scripts/import_annotations_v2_rough_jsonl.py --list-tasks
 ```
 
-远程部署使用非默认数据路径时，需要显式传入对应的 `state.json`：
+脚本默认与 `AnnotationV2Store` 使用相同路径解析逻辑：优先读取环境变量 `ANNOTATIONS_V2_STATE_PATH`，任务数据目录优先读取 `ANNOTATIONS_V2_DATA_DIR`，然后才回退到仓库内默认路径。远程部署时推荐先确认当前 shell 继承了服务使用的同一组环境变量：
+
+```bash
+export ANNOTATIONS_V2_STATE_PATH=/path/to/web/annotations_v2/data/state.json
+export ANNOTATIONS_V2_DATA_DIR=/path/to/web/annotations_v2/data/tasks
+python scripts/import_annotations_v2_rough_jsonl.py --list-tasks
+```
+
+也可以临时显式覆盖 `state.json`：
 
 ```bash
 python scripts/import_annotations_v2_rough_jsonl.py \
