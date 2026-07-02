@@ -1333,6 +1333,76 @@ def test_v2_unified_results_can_filter_by_status_and_labels():
     assert rows[0]["item_index"] == 0
 
 
+def test_v2_unified_results_without_filters_uses_direct_page_slice(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(5)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    original_unified_result_row = store._unified_result_row
+    row_indexes = []
+
+    def fail_unified_matches_filters(task_payload, item, record, filters):
+        raise AssertionError("unfiltered results should not scan every item through filter matching")
+
+    def counting_unified_result_row(task_payload, item, record):
+        row_indexes.append(item["item_index"])
+        return original_unified_result_row(task_payload, item, record)
+
+    monkeypatch.setattr(store, "_unified_matches_filters", fail_unified_matches_filters)
+    monkeypatch.setattr(store, "_unified_result_row", counting_unified_result_row)
+
+    total, rows = store.get_unified_results(task["id"], offset=2, limit=1)
+
+    assert total == 5
+    assert [row["item_index"] for row in rows] == [2]
+    assert row_indexes == [2]
+
+
+def test_v2_unified_results_filter_options_are_loaded_from_dedicated_endpoint(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        filter_option_calls = 0
+        original_get_filter_options = annotations_v2_app.store.get_unified_filter_options
+
+        def counting_get_filter_options(task_id):
+            nonlocal filter_option_calls
+            filter_option_calls += 1
+            return original_get_filter_options(task_id)
+
+        monkeypatch.setattr(annotations_v2_app.store, "get_unified_filter_options", counting_get_filter_options)
+        client = annotations_v2_app.app.test_client()
+
+        results_response = client.get(f"/api/tasks/{task['id']}/results?page=0&limit=1")
+        filter_response = client.get(f"/api/tasks/{task['id']}/results/filter-options")
+
+        assert results_response.status_code == 200
+        assert "filter_options" not in results_response.get_json()
+        assert filter_option_calls == 1
+        assert filter_response.status_code == 200
+        assert filter_response.get_json()["filter_options"]["statuses"]
+    finally:
+        annotations_v2_app.store = old_store
+
+
 def test_v2_unified_label_edit_records_revision_history_in_gzip_shard():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -2254,6 +2324,7 @@ def test_v2_api_exposes_unified_results_and_label_edit():
             json={"username": "alice", "labels": {"输入图": {"菜品种类": "西餐"}}},
         )
         response = client.get(f"/api/tasks/{task['id']}/results?page=0&limit=1")
+        filter_response = client.get(f"/api/tasks/{task['id']}/results/filter-options")
 
         assert edit_response.status_code == 200
         assert edit_response.get_json()["record"]["username"] == "alice"
@@ -2261,7 +2332,8 @@ def test_v2_api_exposes_unified_results_and_label_edit():
         data = response.get_json()
         assert data["total"] == 1
         assert data["results"][0]["effective_labels"] == {"输入图": {"菜品种类": "西餐"}}
-        assert data["filter_options"]["statuses"]
+        assert "filter_options" not in data
+        assert filter_response.get_json()["filter_options"]["statuses"]
     finally:
         annotations_v2_app.store = old_store
 
@@ -2528,7 +2600,7 @@ def test_v2_frontend_serializes_checked_label_choice_inputs():
 
 def test_v2_templates_bust_shared_app_js_cache_after_queue_changes():
     template_dir = PROJECT_ROOT / "web" / "annotations_v2" / "templates"
-    expected_version = "app.js') }}?v=20260609-task-editing"
+    expected_version = "app.js') }}?v=20260702-results-perf"
 
     for template_name in ["index.html", "rate.html", "sample.html", "visualize.html"]:
         template = (template_dir / template_name).read_text(encoding="utf-8")
@@ -2720,7 +2792,7 @@ def test_v2_fine_form_defaults_to_rough_result_for_fast_acceptance():
     assert "goToItem(state.index + 1)" in script
 
 
-def test_v2_frontend_preloads_next_three_preview_pages():
+def test_v2_frontend_preloads_rate_neighbors_but_not_visualization_result_pages():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
     assert "const PRELOAD_FORWARD_PAGES = 3;" in script
@@ -2733,9 +2805,8 @@ def test_v2_frontend_preloads_next_three_preview_pages():
     assert "function preloadNeighborItems(items, currentIndex)" in script
     assert "offset <= PRELOAD_FORWARD_PAGES" in script
     assert "preloadStageNeighbors();" in script
-    assert "function preloadVisualizationNeighbors()" in script
-    assert "preloadVisualizationNeighbors().catch((error) => console.warn(error));" in script
-    assert "function preloadVisualizationPageImages(page)" in script
+    assert "preloadVisualizationNeighbors().catch((error) => console.warn(error));" not in script
+    assert "function preloadVisualizationPageImages(page)" not in script
 
 
 def test_v2_frontend_pages_rate_items_instead_of_loading_full_stage():
@@ -2823,6 +2894,17 @@ def test_v2_frontend_links_and_renders_unified_visualization_page():
     assert "renderScreeningVisualization" not in script
     assert "renderSampleVisualization" not in script
     assert "renderLabelVisualization" not in script
+
+
+def test_v2_frontend_loads_visualization_page_without_full_task_list_or_filter_options():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'if (state.page === "visualize")' in script
+    assert "await loadTask(state.taskId);" in script
+    assert "await openVisualizationPage();" in script
+    assert 'params.set("include_filter_options", options.includeFilterOptions === true ? "1" : "0");' in script
+    assert "refreshVisualizationFilterOptions().catch((error) => console.warn(error));" in script
+    assert "`/api/tasks/${state.taskId}/results/filter-options`" in script
 
 
 def test_v2_visualization_frontend_exposes_filter_controls():

@@ -190,11 +190,12 @@ async function enterApp() {
     await openStage(state.taskId, params.get("stage") || "rough");
     return;
   }
-  await loadTasks();
   if (state.page === "visualize") {
+    await loadTask(state.taskId);
     await openVisualizationPage();
     return;
   }
+  await loadTasks();
   if (state.page === "sample") {
     await openSamplePage();
     return;
@@ -1021,6 +1022,7 @@ async function openVisualizationPage() {
   state.activeTask = taskById(state.taskId) || { id: state.taskId, name: state.taskId };
   await reloadVisualizationResults();
   renderVisualizationPage();
+  refreshVisualizationFilterOptions().catch((error) => console.warn(error));
 }
 
 async function reloadVisualizationResults(options = {}) {
@@ -1028,9 +1030,7 @@ async function reloadVisualizationResults(options = {}) {
     page: String(state.visualizationPage),
     limit: "1",
   });
-  if (options.includeFilterOptions === false) {
-    params.set("include_filter_options", "0");
-  }
+  params.set("include_filter_options", options.includeFilterOptions === true ? "1" : "0");
   if (hasActiveVisualizationFilters()) {
     params.set("filters", JSON.stringify(buildVisualizationFilterPayload()));
   }
@@ -1044,6 +1044,12 @@ async function reloadVisualizationResults(options = {}) {
       await reloadVisualizationResults(options);
     }
   }
+}
+
+async function refreshVisualizationFilterOptions() {
+  const data = await api(`/api/tasks/${state.taskId}/results/filter-options`);
+  state.visualizationFilterOptions = data.filter_options || state.visualizationFilterOptions;
+  renderVisualizationFilterPanel();
 }
 
 function renderVisualizationPage() {
@@ -1078,7 +1084,6 @@ function renderVisualizationPage() {
   $("visualizationSrcImage").onerror = () => $("visualizationSrcImage").removeAttribute("src");
   $("visualizationDstImage").onerror = () => $("visualizationDstImage").removeAttribute("src");
   renderVisualizationImagePrompt(item);
-  preloadVisualizationNeighbors().catch((error) => console.warn(error));
   renderUnifiedResultPanel(item);
 }
 
@@ -1328,32 +1333,6 @@ function preloadNeighborItems(items, currentIndex) {
     preloadImage(item.image_urls?.src || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/src`);
     preloadImage(item.image_urls?.dst || `/api/tasks/${state.activeTask.id}/images/${item.item_index}/dst`);
   }
-}
-
-async function preloadVisualizationNeighbors() {
-  if (!state.visualizationTotal) return;
-  const pages = [];
-  for (let offset = 1; offset <= PRELOAD_FORWARD_PAGES; offset += 1) {
-    const page = state.visualizationPage + offset;
-    if (page < state.visualizationTotal) pages.push(page);
-  }
-  await Promise.all(pages.map((page) => preloadVisualizationPageImages(page)));
-}
-
-async function preloadVisualizationPageImages(page) {
-  const params = new URLSearchParams({
-    page: String(page),
-    limit: "1",
-    include_filter_options: "0",
-  });
-  if (hasActiveVisualizationFilters()) {
-    params.set("filters", JSON.stringify(buildVisualizationFilterPayload()));
-  }
-  const data = await api(`/api/tasks/${state.taskId}/results?${params.toString()}`);
-  const item = (data.results || [])[0];
-  if (!item) return;
-  preloadImage(item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
-  preloadImage(item.image_urls?.dst || `/api/tasks/${state.taskId}/images/${item.item_index}/dst`);
 }
 
 function preloadImage(src) {

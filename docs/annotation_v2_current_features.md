@@ -402,13 +402,13 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 
 ### 11.4 前端预加载
 
-标注页和可视化页当前项图片会设置：
+标注页和结果页当前项图片会设置：
 
 - `loading = eager`。
 - `decoding = async`。
 - `fetchPriority = high`。
 
-前端会预加载当前项之后 3 条的原图和目标图。预加载图片保存在内存 `Map` 中，最多保留 48 张，超过后移除最早记录。
+标注页会预加载当前项之后 3 条的原图和目标图。预加载图片保存在内存 `Map` 中，最多保留 48 张，超过后移除最早记录。结果页不再通过额外 `/results` 请求预加载后 3 页，避免首屏后立即触发多次全量结果扫描。
 
 ## 12. 加载速度与响应需求
 
@@ -448,8 +448,11 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 
 ### 12.5 可视化加载
 
-- 可视化页面一次只拉取当前页结果，当前前端固定 `limit=1`。
-- 翻页时应预加载后 3 页图片。
+- 结果页面进入时应直接加载单任务元信息，不应为了进入任务而等待全部任务列表。
+- 结果页面一次只拉取当前页结果，当前前端固定 `limit=1`。
+- 首屏结果请求默认带 `include_filter_options=0`，筛选项通过 `/api/tasks/<task_id>/results/filter-options` 异步加载。
+- 无筛选条件时，统一结果接口应直接按 offset/limit 切片，不应逐条执行筛选匹配。
+- 结果页首屏不应额外请求后 3 页 `/results` 做预加载。
 - 筛选条件改变后应回到第一页。
 - 可视化筛选选项可以扫描当前阶段候选数据，但不应读取图片二进制。
 - 当任务规模继续增大时，筛选选项计算是潜在瓶颈，需要考虑缓存或增量索引。
@@ -473,6 +476,8 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 - 所有 Flask 请求会记录总耗时，并在响应头返回 `X-Annotation-Elapsed-Ms`。
 - `annotations_v2.performance` logger 会输出 summary 分段：`summary.read_items`、`summary.read_records`、`summary.calculate`、`summary.total`。
 - 阶段分页会输出：`items_page.read_records`、`items_page.read_items`、`items_page.filter_sort`、`items_page.payload`、`items_page.total`。
+- 结果分页会输出：`results.items_reference`、`results.read_records`、`results.filter_scan`、`results.payload`、`results.total`。
+- 结果筛选项会输出：`results_filter_options.items_reference`、`results_filter_options.read_records`、`results_filter_options.calculate`、`results_filter_options.total`。
 - 图片接口会输出：`image.path_lookup`、`image.cache_lookup`，其中 `hit=true/false` 可判断是否命中预览缓存。
 - 远程部署排查卡顿时，优先按这些 step 区分是任务进度统计、分页候选筛选、records 读取，还是图片缓存未命中。
 
@@ -513,6 +518,9 @@ POST /api/tasks/<task_id>/items/<item_index>/label
 GET  /api/tasks/<task_id>/sample-buckets
 POST /api/tasks/<task_id>/sample
 GET  /api/tasks/<task_id>/visualization-results?stage=rough|fine|sample|label&page=0&limit=1
+GET  /api/tasks/<task_id>/results?page=0&limit=1&include_filter_options=0
+GET  /api/tasks/<task_id>/results/filter-options
+POST /api/tasks/<task_id>/results/<item_index>/labels
 ```
 
 导入导出与图片接口：

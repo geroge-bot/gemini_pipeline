@@ -656,6 +656,9 @@ class AnnotationV2Store:
     def _read_items(self, task: dict[str, Any]) -> list[dict[str, Any]]:
         return deepcopy(self._items_cache_entry(task)["items"])
 
+    def _items_reference(self, task: dict[str, Any]) -> list[dict[str, Any]]:
+        return self._items_cache_entry(task)["items"]
+
     def _generation_prompt_for_item(
         self,
         prompt_dir: Path,
@@ -2478,27 +2481,59 @@ class AnnotationV2Store:
         limit: int | None = None,
         filters: dict[str, Any] | None = None,
     ) -> tuple[int, list[dict[str, Any]]]:
+        request_started_at = time.perf_counter()
         task = self._require_task(task_id)
-        items = self._read_items(task)
+        step_started_at = time.perf_counter()
+        items = self._items_reference(task)
+        log_perf_step("results.items_reference", step_started_at, task_id=task_id, items=len(items))
+        step_started_at = time.perf_counter()
         records = self._read_records(task)
-        candidates = [
-            item
-            for item in items
-            if self._unified_matches_filters(task, item, records.get(str(item["item_index"]), {}), filters)
-        ]
-        total = len(candidates)
+        log_perf_step("results.read_records", step_started_at, task_id=task_id, records=len(records))
         start = max(0, int(offset or 0))
-        stop = total if limit is None else min(total, start + max(0, int(limit)))
+        page_limit = None if limit is None else max(0, int(limit))
+        if not filters:
+            total = len(items)
+            stop = total if page_limit is None else min(total, start + page_limit)
+            page_items = items[start:stop]
+            step_started_at = time.perf_counter()
+            rows = [
+                self._unified_result_row(task, item, records.get(str(item["item_index"]), {}))
+                for item in page_items
+            ]
+            log_perf_step("results.payload", step_started_at, task_id=task_id, count=len(rows), filtered=False)
+            log_perf_step("results.total", request_started_at, task_id=task_id, total=total, offset=start, limit=page_limit, filtered=False)
+            return total, rows
+
+        step_started_at = time.perf_counter()
+        total = 0
+        page_items = []
+        for item in items:
+            record = records.get(str(item["item_index"]), {})
+            if not self._unified_matches_filters(task, item, record, filters):
+                continue
+            if total >= start and (page_limit is None or len(page_items) < page_limit):
+                page_items.append(item)
+            total += 1
+        log_perf_step("results.filter_scan", step_started_at, task_id=task_id, total=total)
+        step_started_at = time.perf_counter()
         rows = [
             self._unified_result_row(task, item, records.get(str(item["item_index"]), {}))
-            for item in candidates[start:stop]
+            for item in page_items
         ]
+        log_perf_step("results.payload", step_started_at, task_id=task_id, count=len(rows), filtered=True)
+        log_perf_step("results.total", request_started_at, task_id=task_id, total=total, offset=start, limit=page_limit, filtered=True)
         return total, rows
 
     def get_unified_filter_options(self, task_id: str) -> dict[str, Any]:
+        request_started_at = time.perf_counter()
         task = self._require_task(task_id)
-        items = self._read_items(task)
+        step_started_at = time.perf_counter()
+        items = self._items_reference(task)
+        log_perf_step("results_filter_options.items_reference", step_started_at, task_id=task_id, items=len(items))
+        step_started_at = time.perf_counter()
         records = self._read_records(task)
+        log_perf_step("results_filter_options.read_records", step_started_at, task_id=task_id, records=len(records))
+        step_started_at = time.perf_counter()
         mos_values = set()
         defect_values = set()
         annotators = set()
@@ -2539,7 +2574,7 @@ class AnnotationV2Store:
             dimension_name = "/".join(str(part) for part in path[1:])
             groups.setdefault(group_name, []).append({"name": dimension_name, "options": sorted(entry["values"])})
 
-        return {
+        payload = {
             "statuses": [
                 {"value": "rough_completed", "label": "粗筛完成"},
                 {"value": "rough_passed", "label": "粗筛通过"},
@@ -2556,6 +2591,9 @@ class AnnotationV2Store:
                 for group_name, dimensions in sorted(groups.items())
             ],
         }
+        log_perf_step("results_filter_options.calculate", step_started_at, task_id=task_id, label_groups=len(payload["label_options"]))
+        log_perf_step("results_filter_options.total", request_started_at, task_id=task_id, items=len(items), records=len(records))
+        return payload
 
     def get_visualization_results(
         self,
@@ -2857,7 +2895,7 @@ def api_unified_results(task_id: str):
     page = clean_non_negative_int(request.args.get("page"), 0)
     limit = clean_positive_int(request.args.get("limit"), 1)
     filters = json.loads(request.args.get("filters", "{}") or "{}")
-    include_filter_options = clean_bool(request.args.get("include_filter_options", True))
+    include_filter_options = clean_bool(request.args.get("include_filter_options", False))
     total, results = store.get_unified_results(task_id, offset=page * limit, limit=limit, filters=filters)
     payload = {
         "results": results,
@@ -2868,6 +2906,11 @@ def api_unified_results(task_id: str):
     if include_filter_options:
         payload["filter_options"] = store.get_unified_filter_options(task_id)
     return jsonify(payload)
+
+
+@app.get("/api/tasks/<task_id>/results/filter-options")
+def api_unified_result_filter_options(task_id: str):
+    return jsonify({"filter_options": store.get_unified_filter_options(task_id)})
 
 
 @app.post("/api/tasks/<task_id>/items/<int:item_index>/rough")
