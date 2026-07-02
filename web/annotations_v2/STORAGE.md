@@ -10,7 +10,7 @@ Each task has an independent data directory:
 data/tasks/<task_id>/
   items.json
   records/
-    <item_index>.json
+    <item_index>.json.gz
 ```
 
 `state.json` stores task metadata and points each task at its `data_dir`.
@@ -27,9 +27,9 @@ Each row stores:
 - imported `labels`
 - optional generation prompt fields
 
-## `records/<item_index>.json`
+## `records/<item_index>.json.gz`
 
-Each file under `records/` stores the workflow state for one item. Normal rough, fine, and label saves write only the current item's record file.
+Each file under `records/` stores the workflow state for one item. Normal rough, fine, and label saves write only the current item's gzip-compressed record file.
 
 Typical fields are:
 
@@ -38,15 +38,29 @@ Typical fields are:
 - `sampled`
 - `sample_bucket`
 - `label`
+- `label_revisions`
 - temporary `label_claim`
 
 Bulk operations such as sampling and JSONL import may update multiple item record files.
 
+### Label Revision History
+
+Unified result-page label edits update the current `label` snapshot and append an entry to `label_revisions`.
+
+Each revision contains:
+
+- `id`: unique revision id.
+- `username`: editor username from the active session.
+- `updated_at`: Unix timestamp.
+- `before`: effective labels before the edit.
+- `after`: saved labels after the edit.
+- `source`: currently `unified_results`.
+
 ## Legacy Compatibility
 
-Older tasks may still have `records.json`, a single object keyed by `item_index`. The store reads this file as a legacy baseline and then overlays any newer `records/<item_index>.json` files.
+Older tasks may still have `records.json`, a single object keyed by `item_index`, or uncompressed `records/<item_index>.json` shards. The store reads `records.json` as a legacy baseline, overlays uncompressed shards, then overlays compressed `records/<item_index>.json.gz` shards.
 
-New saves are written to `records/<item_index>.json`; they do not rewrite `records.json`. This allows existing tasks to move to per-item storage gradually as users continue annotating.
+New saves are written to `records/<item_index>.json.gz`; they do not rewrite `records.json`. If an older uncompressed shard exists for the same item, a successful compressed save removes that stale `.json` shard. This allows existing tasks to move to compressed per-item storage gradually as users continue annotating.
 
 ## Concurrency
 

@@ -1,8 +1,0 @@
-{
-  "scenario": "normal-4g",
-  "claim_p95_ms": 7.073,
-  "save_p95_ms": 1.351,
-  "claim_payload_bytes_p95": 21868,
-  "image_cache_hit_rate": 1.0,
-  "failed_asset_count": 0
-}

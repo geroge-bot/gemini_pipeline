@@ -4,21 +4,25 @@ import json
 import sys
 import threading
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.config import DEFAULT_MODEL_ANALYSIS, DEFAULT_SERVICE_TEXT
-from pipeline.modules.user_guide_generator import USER_GUIDE_FIELDS, UserGuideGeneratorModule
+from pipeline.modules.user_guide_generator import (
+    USER_GUIDE_FIELDS,
+    UserGuideGeneratorModule,
+    has_compose_user_guide,
+)
 from pipeline.utils.client_factory import create_client_from_service
 
 
 DEFAULT_MAX_WORKERS = 50
 DEFAULT_CHECKPOINT_INTERVAL = 50
 DEFAULT_GUIDE_FIELD = "用户指引"
-GuideGenerator = Callable[[Path, Path], dict]
+GuideGenerator = Callable[[Path, Path], Any]
 
 
 def iter_jsonl_records(jsonl_path: str | Path) -> Iterable[tuple[int, dict]]:
@@ -71,14 +75,21 @@ def generate_guide_with_module(
     )
 
 
-def format_guide_preview(guide: dict) -> str:
-    return " | ".join(str(guide.get(field, "")) for field in USER_GUIDE_FIELDS)
+def format_guide_preview(guide: Any) -> str:
+    if isinstance(guide, list):
+        previews = []
+        for index, item in enumerate(guide, 1):
+            if isinstance(item, dict):
+                text = " | ".join(str(item[field]) for field in USER_GUIDE_FIELDS if field in item)
+                previews.append(f"{index}. {text}")
+        return " || ".join(previews)
+    if isinstance(guide, dict):
+        return " | ".join(str(guide[field]) for field in USER_GUIDE_FIELDS if field in guide)
+    return str(guide)
 
 
 def has_successful_guide(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    return all(isinstance(value.get(field), str) and value[field].strip() for field in USER_GUIDE_FIELDS)
+    return has_compose_user_guide(value)
 
 
 def write_jsonl_checkpoint(

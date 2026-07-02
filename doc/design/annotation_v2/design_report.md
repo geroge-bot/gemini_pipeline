@@ -88,7 +88,7 @@ web/annotations_v2/
   app.py
   data/state.json
   data/tasks/<task_id>/items.json
-  data/tasks/<task_id>/records/<item_index>.json
+  data/tasks/<task_id>/records/<item_index>.json.gz
   STORAGE.md
   templates/index.html
   static/app.js
@@ -154,7 +154,7 @@ Flask 路由只负责参数校验、调用 store、返回 JSON 或页面。
 ]
 ```
 
-`records/<item_index>.json` 保存单条数据的阶段记录。旧任务中的 `records.json` 仍会作为兼容基线读取；如果同一条数据存在新的分片文件，以分片文件为准。
+`records/<item_index>.json.gz` 保存单条数据的 gzip 压缩阶段记录。旧任务中的 `records.json` 和未压缩 `records/<item_index>.json` 仍会兼容读取；如果同一条数据同时存在旧文件和压缩分片，以压缩分片为准。
 
 ```json
 {

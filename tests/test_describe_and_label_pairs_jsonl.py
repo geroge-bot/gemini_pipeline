@@ -60,11 +60,15 @@ def test_describe_and_label_pairs_jsonl_writes_description_and_labels_to_preserv
 
         def fake_user_guide_generator(original_path: Path, generated_path: Path) -> dict:
             call_order.append("user_guide")
-            return {
-                "场景描述": "暖光中餐",
-                "整体引导": "靠近餐盘低角度拍摄拍出热菜烟火感",
-                "摆盘描述": "把主菜放在画面中央配菜沿盘边自然展开",
-            }
+            return [
+                {
+                    "场景描述": "暖光中餐",
+                    "整体引导": "靠近餐盘低角度拍摄，拍出热菜烟火感。",
+                    "摆盘描述": "把主菜放在画面中央，配菜沿盘边自然展开。",
+                    "调用标签": ["微调级", "通俗级", "光源与氛围"],
+                    "整体引导重写": "想拍出热菜烟火感，把主菜放到中间，再压低手机靠近拍。",
+                },
+            ]
 
         stats = describe_and_label_pairs_jsonl(
             jsonl_path=jsonl_path,
@@ -86,7 +90,7 @@ def test_describe_and_label_pairs_jsonl_writes_description_and_labels_to_preserv
         assert payload["generated_image_path"] == str(generated)
         assert payload["description"]["question"] == "怎么拍得好看些？"
         assert payload["labels"]["output_image"]["aesthetic_score"] == 4
-        assert payload["user_guide"]["场景描述"] == "暖光中餐"
+        assert payload["user_guide"][0]["场景描述"] == "暖光中餐"
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)
@@ -133,11 +137,15 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
             "both_p1": {
                 "description": {"question": "已有问题"},
                 "labels": {"output_image": {"aesthetic_score": 5}},
-                "user_guide": {
-                    "场景描述": "已有场景",
-                    "整体引导": "已有整体引导",
-                    "摆盘描述": "已有摆盘描述",
-                },
+                "user_guide": [
+                    {
+                        "场景描述": "已有场景",
+                        "整体引导": "已有整体引导",
+                        "摆盘描述": "已有摆盘描述",
+                        "调用标签": ["微调级"],
+                        "整体引导重写": "已有整体引导重写",
+                    },
+                ],
             },
             "only_description_p1": {
                 "description": {"question": "已有问题"},
@@ -146,11 +154,15 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
                 "labels": {"output_image": {"aesthetic_score": 5}},
             },
             "only_user_guide_p1": {
-                "user_guide": {
-                    "场景描述": "已有场景",
-                    "整体引导": "已有整体引导",
-                    "摆盘描述": "已有摆盘描述",
-                },
+                "user_guide": [
+                    {
+                        "场景描述": "已有场景",
+                        "整体引导": "已有整体引导",
+                        "摆盘描述": "已有摆盘描述",
+                        "调用标签": ["微调级"],
+                        "整体引导重写": "已有整体引导重写",
+                    },
+                ],
             },
         }
         for stem, payload in existing_payloads.items():
@@ -175,11 +187,15 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
 
         def fake_user_guide_generator(original_path: Path, generated_path: Path) -> dict:
             calls["user_guide"] += 1
-            return {
-                "场景描述": f"新场景:{generated_path.name}",
-                "整体引导": "靠近餐盘低角度拍摄拍出热菜烟火感",
-                "摆盘描述": "把主菜放在画面中央配菜沿盘边自然展开",
-            }
+            return [
+                {
+                    "场景描述": f"新场景:{generated_path.name}",
+                    "整体引导": "靠近餐盘低角度拍摄，拍出热菜烟火感。",
+                    "摆盘描述": "把主菜放在画面中央，配菜沿盘边自然展开。",
+                    "调用标签": ["微调级", "通俗级", "光源与氛围"],
+                    "整体引导重写": "想拍出热菜烟火感，把主菜放到中间，再压低手机靠近拍。",
+                },
+            ]
 
         stats = describe_and_label_pairs_jsonl(
             jsonl_path=jsonl_path,
@@ -222,7 +238,7 @@ def test_describe_and_label_pairs_jsonl_reuses_existing_fields_and_only_generate
         )
         assert only_user_guide["description"]["question"] == "新问题:only_user_guide_p1.jpg"
         assert only_user_guide["labels"]["output_image"]["name"] == "only_user_guide_p1.jpg"
-        assert only_user_guide["user_guide"]["场景描述"] == "已有场景"
+        assert only_user_guide["user_guide"][0]["场景描述"] == "已有场景"
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)

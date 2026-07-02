@@ -6,6 +6,7 @@ from pipeline.interfaces import PipelineContext
 from pipeline.models import PipelineConfig, PipelineResult
 from pipeline.modules.user_guide_generator import (
     UserGuideGeneratorModule,
+    has_compose_user_guide,
     parse_user_guide_json,
 )
 
@@ -38,33 +39,114 @@ def _make_context(scratch: Path) -> PipelineContext:
 
 
 def test_parse_user_guide_json_strips_markdown_fence() -> None:
-    payload = {
-        "场景描述": "日式寿司",
-        "整体引导": "将寿司排成斜线，配菜点缀边缘，俯拍突出层次",
-        "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白",
-    }
+    payload = [
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+            "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+        },
+    ]
+    text = "\n".join(json.dumps(item, ensure_ascii=False) for item in payload)
 
-    parsed = parse_user_guide_json("```json\n" + json.dumps(payload, ensure_ascii=False) + "\n```")
+    parsed = parse_user_guide_json("```jsonl\n" + text + "\n```")
 
     assert parsed == payload
 
 
-def test_parse_user_guide_json_keeps_only_latest_compose_fields() -> None:
-    payload = {
-        "场景描述": "日式寿司",
-        "整体引导": "将寿司排成斜线，配菜点缀边缘，俯拍突出层次",
-        "整体描述": "旧字段不应保留",
-        "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白",
-        "用户引导语": "旧字段不应保留",
-    }
+def test_parse_user_guide_json_accepts_json_array() -> None:
+    payload = [
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+            "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+        },
+    ]
 
     parsed = parse_user_guide_json(json.dumps(payload, ensure_ascii=False))
 
-    assert parsed == {
+    assert parsed == payload
+
+
+def test_parse_user_guide_json_accepts_single_object_as_one_scheme() -> None:
+    payload = {
         "场景描述": "日式寿司",
-        "整体引导": "将寿司排成斜线，配菜点缀边缘，俯拍突出层次",
-        "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白",
+        "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+        "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+        "调用标签": ["微调级", "通俗级", "视觉表现"],
+        "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
     }
+
+    assert parse_user_guide_json(json.dumps(payload, ensure_ascii=False)) == [payload]
+
+
+def test_parse_user_guide_json_rejects_wrong_scheme_count() -> None:
+    payload = [
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+            "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+        },
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "把寿司往中心推，镜头稍微压低，拍出食材丰盛感。",
+            "摆盘描述": "把寿司往盘子中心聚拢，边缘保留干净留白。",
+            "调用标签": ["微调级", "通俗级", "材质与触觉"],
+            "整体引导重写": "聚焦鱼生的水润纹理，把寿司聚到中心并压低手机靠近拍。",
+        },
+    ]
+
+    try:
+        parse_user_guide_json(json.dumps(payload, ensure_ascii=False))
+    except ValueError as exc:
+        assert "exactly 1" in str(exc)
+    else:
+        raise AssertionError("multi-scheme user guide should be rejected")
+
+
+def test_has_compose_user_guide_requires_one_scheme() -> None:
+    item = {
+        "场景描述": "日式寿司",
+        "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+        "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+        "调用标签": ["微调级", "通俗级", "视觉表现"],
+        "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+    }
+
+    assert has_compose_user_guide([item])
+    assert not has_compose_user_guide(item)
+    assert not has_compose_user_guide([item, dict(item)])
+
+
+def test_parse_user_guide_json_keeps_only_latest_compose_fields_and_aliases() -> None:
+    payload = [
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+            "整体描述": "旧字段不应保留",
+            "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+            "用户引导语": "旧字段不应保留",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+        },
+    ]
+
+    parsed = parse_user_guide_json(json.dumps(payload, ensure_ascii=False))
+
+    assert parsed == [
+        {
+            "场景描述": "日式寿司",
+            "整体引导": "将寿司排成斜线，手机垂直俯拍，突出寿司层次。",
+            "摆盘描述": "把寿司错落排成斜线，姜片和芥末放在盘边留白。",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": "想拍出更清楚的层次感，先把寿司排成斜线，再举到正上方拍。",
+        },
+    ]
 
 
 def test_user_guide_generator_module_writes_guide(monkeypatch) -> None:
@@ -73,11 +155,15 @@ def test_user_guide_generator_module_writes_guide(monkeypatch) -> None:
         shutil.rmtree(scratch)
 
     context = _make_context(scratch)
-    expected = {
-        "场景描述": "法式甜点",
-        "整体引导": "把蛋糕移到窗边，浆果围边点缀，45度俯拍",
-        "摆盘描述": "蛋糕居中放置，浆果沿盘边半圈排列，留出前景空白",
-    }
+    expected = [
+        {
+            "场景描述": "法式甜点",
+            "整体引导": "把蛋糕移到窗边，手机贴近俯拍，拍出果香明亮感。",
+            "摆盘描述": "蛋糕居中放置，浆果沿盘边半圈排列，留出前景空白。",
+            "调用标签": ["微调级", "通俗级", "光源与氛围"],
+            "整体引导重写": "想拍出果香明亮感，把蛋糕挪到窗边，再贴近一点俯拍。",
+        },
+    ]
     calls = {}
     saved_events = []
 
@@ -112,10 +198,13 @@ def test_user_guide_generator_module_writes_guide(monkeypatch) -> None:
         assert calls["base_url"] == "https://example.invalid/v1"
         assert calls["model"] == "vision-model"
         user_content = calls["messages"][1]["content"]
-        assert user_content[0]["text"].startswith("你是一位深耕美食摄影")
+        assert "你是一位深耕商业美食摄影" in user_content[0]["text"]
         assert "场景描述" in user_content[0]["text"]
         assert "整体引导" in user_content[0]["text"]
         assert "摆盘描述" in user_content[0]["text"]
+        assert "整体引导重写" in user_content[0]["text"]
+        assert "选用语气" not in user_content[0]["text"]
+        assert "调用标签" in user_content[0]["text"]
         assert "用户引导语" not in user_content[0]["text"]
         assert user_content[1]["image_url"]["url"] == "data:image/jpeg;base64,orig-b64"
         assert user_content[2]["image_url"]["url"] == "data:image/jpeg;base64,gen-b64"
@@ -142,11 +231,15 @@ def test_user_guide_generator_skips_existing_guide(monkeypatch) -> None:
     try:
         context = _make_context(scratch)
         context.results[0].description = {
-            "user_guide": {
-                "场景描述": "已有场景",
-                "整体引导": "已有整体引导",
-                "摆盘描述": "已有摆盘描述",
-            }
+            "user_guide": [
+                {
+                    "场景描述": "已有场景",
+                    "整体引导": "已有整体引导",
+                    "摆盘描述": "已有摆盘描述",
+                    "调用标签": ["微调级"],
+                    "整体引导重写": "已有整体引导重写",
+                }
+            ]
         }
 
         def fail_if_called(*args, **kwargs):
@@ -156,7 +249,7 @@ def test_user_guide_generator_skips_existing_guide(monkeypatch) -> None:
 
         UserGuideGeneratorModule().process(context)
 
-        assert context.results[0].description["user_guide"]["场景描述"] == "已有场景"
+        assert context.results[0].description["user_guide"][0]["场景描述"] == "已有场景"
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)
