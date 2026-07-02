@@ -184,6 +184,12 @@ async function enterApp() {
     return;
   }
   showApp();
+  if (state.page === "rate") {
+    const params = new URLSearchParams(window.location.search);
+    await loadTask(state.taskId);
+    await openStage(state.taskId, params.get("stage") || "rough");
+    return;
+  }
   await loadTasks();
   if (state.page === "visualize") {
     await openVisualizationPage();
@@ -192,10 +198,6 @@ async function enterApp() {
   if (state.page === "sample") {
     await openSamplePage();
     return;
-  }
-  if (state.page === "rate") {
-    const params = new URLSearchParams(window.location.search);
-    await openStage(state.taskId, params.get("stage") || "rough");
   }
 }
 
@@ -213,10 +215,41 @@ function parseLabelPaths(value) {
     .filter((path) => path.length > 0);
 }
 
-async function loadTasks() {
+async function loadTasks(options = {}) {
+  const refreshSummaries = options.refreshSummaries !== false;
   const data = await api("/api/tasks");
   state.tasks = data.tasks || [];
   if ($("taskList")) renderTasks();
+  if (refreshSummaries) refreshTaskSummaries();
+}
+
+async function loadTask(taskId) {
+  const data = await api(`/api/tasks/${taskId}`);
+  const task = data.task;
+  if (!task) throw new Error("任务不存在或尚未加载");
+  const index = state.tasks.findIndex((entry) => entry.id === task.id);
+  if (index === -1) {
+    state.tasks.push(task);
+  } else {
+    state.tasks[index] = task;
+  }
+  state.activeTask = task;
+  return task;
+}
+
+function refreshTaskSummaries() {
+  if (!$("taskList") || !state.tasks.length) return;
+  for (const task of state.tasks) {
+    refreshTaskSummary(task.id).catch((error) => console.warn(error));
+  }
+}
+
+async function refreshTaskSummary(taskId) {
+  const data = await api(`/api/tasks/${taskId}/summary`);
+  const task = taskById(taskId);
+  if (!task) return;
+  task.summary = data.summary || task.summary || {};
+  renderTasks();
 }
 
 function renderTasks() {
@@ -469,7 +502,7 @@ function firstUnannotatedItemIndex() {
 }
 
 async function openStage(taskId, stage) {
-  state.activeTask = taskById(taskId);
+  state.activeTask = taskById(taskId) || state.activeTask;
   if (!state.activeTask) {
     showToast("任务不存在或尚未加载");
     return;
@@ -790,8 +823,7 @@ async function saveCurrentStageBeforePageChange() {
 async function reloadCurrentStageAfterSave(preferredIndex) {
   const taskId = state.activeTask?.id || state.taskId;
   const stage = state.stage;
-  await loadTasks();
-  state.activeTask = taskById(taskId);
+  await loadTask(taskId);
   state.stage = stage;
   await loadRateItemPage(state.rateOffset);
 }

@@ -418,10 +418,10 @@ def test_v2_default_server_host_matches_platform(monkeypatch):
     assert annotations_v2_app.default_server_host() == "127.0.0.1"
 
 
-def test_v2_image_endpoint_limits_long_edge_by_default_and_can_return_original():
+def test_v2_image_endpoint_serves_cached_preview_and_can_return_original():
     from PIL import Image
     from web.annotations_v2 import app as annotations_v2_app
-    from web.annotations_v2.app import AnnotationV2Store
+    from web.annotations_v2.app import AnnotationV2Store, resized_image_file
 
     tmp_path = make_workspace_tmp()
     make_test_image(tmp_path / "src" / "large.jpg", (2048, 512))
@@ -434,6 +434,7 @@ def test_v2_image_endpoint_limits_long_edge_by_default_and_can_return_original()
     annotations_v2_app.app.config.update(TESTING=True)
     try:
         task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        resized_image_file(tmp_path / "src" / "large.jpg", annotations_v2_app.store.preview_cache_dir(task["id"]))
         client = annotations_v2_app.app.test_client()
 
         preview_response = client.get(f"/api/tasks/{task['id']}/images/0/src")
@@ -445,13 +446,14 @@ def test_v2_image_endpoint_limits_long_edge_by_default_and_can_return_original()
         assert original_response.status_code == 200
         assert max(preview.size) == 1024
         assert original.size == (2048, 512)
+        assert preview_response.headers["X-Annotation-Preview-Cache"] == "hit"
     finally:
         annotations_v2_app.store = old_store
 
 
-def test_v2_image_endpoint_caches_resized_preview_in_configured_dir():
+def test_v2_image_endpoint_uses_configured_preview_cache_dir():
     from web.annotations_v2 import app as annotations_v2_app
-    from web.annotations_v2.app import AnnotationV2Store
+    from web.annotations_v2.app import AnnotationV2Store, resized_image_file
 
     tmp_path = make_workspace_tmp()
     preview_cache_root = tmp_path / "preview-cache"
@@ -465,6 +467,7 @@ def test_v2_image_endpoint_caches_resized_preview_in_configured_dir():
     annotations_v2_app.app.config.update(TESTING=True)
     try:
         task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        resized_image_file(tmp_path / "src" / "large.jpg", preview_cache_root / task["id"])
         client = annotations_v2_app.app.test_client()
 
         response = client.get(f"/api/tasks/{task['id']}/images/0/src")
@@ -835,6 +838,121 @@ def test_v2_update_task_properties_persists_issue_options_and_label_paths():
     persisted = AnnotationV2Store(tmp_path / "state.json").list_tasks()[0]
     assert persisted["rough"]["issue_options"] == ["构图问题", "颜色问题"]
     assert persisted["selected_label_paths"] == [["输出图", "景别"], ["输入图", "拍摄场景"]]
+
+
+def test_v2_list_tasks_uses_cached_summary_snapshot(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"name": "cached summary", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    summary_path = Path(task["data_dir"]) / "summary.json"
+    write_json(summary_path, {"total": 1, "rough_passed": 0, "cached_marker": "snapshot"})
+
+    def fail_live_summary(task_id):
+        raise AssertionError(f"live summary should not be called for task list: {task_id}")
+
+    monkeypatch.setattr(store, "summary", fail_live_summary)
+
+    tasks = store.list_tasks()
+
+    assert tasks[0]["summary"]["cached_marker"] == "snapshot"
+
+
+def test_v2_get_task_payload_uses_cached_summary_without_listing_all_tasks(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task(
+            {"name": "single task", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)}
+        )
+
+        def fail_list_tasks():
+            raise AssertionError("single task endpoint should not list all tasks")
+
+        monkeypatch.setattr(annotations_v2_app.store, "list_tasks", fail_list_tasks)
+        client = annotations_v2_app.app.test_client()
+
+        response = client.get(f"/api/tasks/{task['id']}")
+
+        assert response.status_code == 200
+        assert response.get_json()["task"]["id"] == task["id"]
+    finally:
+        annotations_v2_app.store = old_store
+
+
+def test_v2_stage_page_only_builds_payload_for_returned_page(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(6)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    original_item_payload = store._item_payload
+    payload_indexes = []
+
+    def counting_item_payload(task_payload, item, record, stage="", username=""):
+        payload_indexes.append(item["item_index"])
+        return original_item_payload(task_payload, item, record, stage=stage, username=username)
+
+    monkeypatch.setattr(store, "_item_payload", counting_item_payload)
+
+    page = store.list_stage_items_page(task["id"], "rough", username="alice", offset=2, limit=2)
+
+    assert page["total"] == 6
+    assert len(page["items"]) == 2
+    assert payload_indexes == [2, 3]
+
+
+def test_v2_image_endpoint_returns_original_when_preview_is_missing(monkeypatch):
+    from PIL import Image
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    preview_cache_root = tmp_path / "preview-cache"
+    make_test_image(tmp_path / "src" / "large.jpg", (2048, 512))
+    make_test_image(tmp_path / "dst" / "small.jpg", (64, 64))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/large.jpg", "dst_image": "dst/small.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json", preview_cache_dir=preview_cache_root)
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+        def fail_resize(path, cache_dir, max_edge=1024):
+            raise AssertionError("image endpoint should not synchronously resize cache misses")
+
+        monkeypatch.setattr(annotations_v2_app, "resized_image_file", fail_resize)
+        client = annotations_v2_app.app.test_client()
+
+        response = client.get(f"/api/tasks/{task['id']}/images/0/src")
+
+        assert response.status_code == 200
+        assert Image.open(BytesIO(response.data)).size == (2048, 512)
+        assert response.headers["X-Annotation-Preview-Cache"] == "miss"
+    finally:
+        annotations_v2_app.store = old_store
 
 
 def test_v2_delete_task_only_unregisters_task_and_preserves_data_dir():

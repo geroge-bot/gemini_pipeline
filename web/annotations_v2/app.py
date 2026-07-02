@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import logging
 import mimetypes
 import os
 import platform
@@ -17,7 +18,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, g, jsonify, render_template, request, send_file
 from PIL import Image
 from web.annotations.label_options import LABEL_OPTION_GROUPS
 
@@ -35,6 +36,7 @@ VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
 TASK_DELETE_ADMIN_USERNAME = "孙本猿"
 LABEL_CLAIM_TTL_SECONDS = 30 * 60
 RECORD_GZIP_COMPRESSLEVEL = 3
+PERF_LOGGER = logging.getLogger("annotations_v2.performance")
 JSON_WRITE_LOCKS: dict[Path, threading.RLock] = {}
 JSON_WRITE_LOCKS_GUARD = threading.Lock()
 CANONICAL_LABEL_DIMENSIONS = {
@@ -56,6 +58,12 @@ def default_server_host() -> str:
 
 def utc_now() -> float:
     return time.time()
+
+
+def log_perf_step(step: str, started_at: float, **fields: Any) -> None:
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    suffix = " ".join(f"{key}={value}" for key, value in fields.items())
+    PERF_LOGGER.info("step=%s elapsed_ms=%.1f%s%s", step, elapsed_ms, " " if suffix else "", suffix)
 
 
 def image_relative_path(root_dir: str | os.PathLike[str] | None, image_path: Any) -> str:
@@ -462,14 +470,11 @@ def preview_cache_key(path: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> str
 def cached_preview_path(cache_dir: Path, cache_key: str) -> Path | None:
     if not cache_dir.exists():
         return None
-    return next(
-        (
-            candidate
-            for candidate in cache_dir.glob(f"{cache_key}.*")
-            if candidate.is_file() and candidate.stem == cache_key
-        ),
-        None,
-    )
+    for suffix in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"):
+        candidate = cache_dir / f"{cache_key}{suffix}"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def preview_cache_index(cache_dir: Path) -> dict[str, Path]:
@@ -517,6 +522,15 @@ def resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIE
         image.save(tmp_path, format=image_format, quality=88, optimize=True)
         os.replace(tmp_path, cache_path)
         return cache_path.resolve(), Image.MIME.get(image_format, mimetype)
+
+
+def cached_resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE_PREVIEW_MAX_EDGE) -> tuple[Path, str] | None:
+    mimetype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    cache_key = preview_cache_key(path, max_edge)
+    cached_path = cached_preview_path(cache_dir, cache_key)
+    if not cached_path:
+        return None
+    return cached_path.resolve(), mimetypes.guess_type(str(cached_path))[0] or mimetype
 
 
 def require_task_delete_admin(payload: dict[str, Any]) -> None:
@@ -573,6 +587,9 @@ class AnnotationV2Store:
 
     def _records_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "records.json"
+
+    def _summary_path(self, task: dict[str, Any]) -> Path:
+        return Path(task["data_dir"]) / "summary.json"
 
     def _records_dir_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "records"
@@ -730,6 +747,51 @@ class AnnotationV2Store:
         legacy_records = read_json_file(self._records_path(task), {})
         legacy_record = legacy_records.get(key, {}) if isinstance(legacy_records, dict) else {}
         return deepcopy(legacy_record) if isinstance(legacy_record, dict) else {}
+
+    def _empty_summary(self, task: dict[str, Any]) -> dict[str, Any]:
+        total = clean_non_negative_int(task.get("item_count"), 0)
+        rough_target = self._stage_target(task, "rough")
+        fine_target = self._stage_target(task, "fine")
+        return {
+            "total": total,
+            "rough_annotator_count": rough_target,
+            "fine_annotator_count": fine_target,
+            "rough_completed": 0,
+            "rough_passed": 0,
+            "fine_candidates": 0,
+            "fine_completed": 0,
+            "fine_passed": 0,
+            "rough_annotation_completed": 0,
+            "rough_annotation_target": total * rough_target,
+            "fine_annotation_completed": 0,
+            "fine_annotation_target": 0,
+            "rough_rounds": [{"round": round_index, "completed": 0, "total": total} for round_index in range(1, rough_target + 1)],
+            "fine_rounds": [{"round": round_index, "completed": 0, "total": 0} for round_index in range(1, fine_target + 1)],
+            "sampled": 0,
+            "label_completed": 0,
+            "stale": True,
+        }
+
+    def _summary_snapshot(self, task: dict[str, Any]) -> dict[str, Any]:
+        summary = read_json_file(self._summary_path(task), None)
+        if isinstance(summary, dict):
+            return deepcopy(summary)
+        return self._empty_summary(task)
+
+    def _write_summary_snapshot(self, task: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
+        snapshot = deepcopy(summary)
+        snapshot["updated_at"] = utc_now()
+        snapshot["stale"] = False
+        write_json_file(self._summary_path(task), snapshot)
+        return snapshot
+
+    def _mark_summary_stale(self, task: dict[str, Any]) -> None:
+        snapshot = self._summary_snapshot(task)
+        snapshot["stale"] = True
+        write_json_file(self._summary_path(task), snapshot)
+
+    def _refresh_summary_snapshot(self, task: dict[str, Any]) -> dict[str, Any]:
+        return self._write_summary_snapshot(task, self._calculate_summary(task))
 
     def _write_records(self, task: dict[str, Any], records: dict[str, Any]) -> None:
         for key, record in records.items():
@@ -992,6 +1054,7 @@ class AnnotationV2Store:
             write_json_file(self._items_path(task), items)
         if updated_records:
             self._write_records(task, records)
+        summary = self._refresh_summary_snapshot(task)
         return {
             "total_rows": len(rows),
             "imported_count": imported_count,
@@ -1000,7 +1063,7 @@ class AnnotationV2Store:
             "updated_items": updated_items,
             "updated_records": updated_records,
             "unmatched_rows": unmatched_rows[:20],
-            "summary": self.summary(task_id),
+            "summary": summary,
         }
 
     def _screening_rounds(self, items: list[dict[str, Any]], records: dict[str, Any], stage: str, target: int) -> list[dict[str, int]]:
@@ -1152,6 +1215,7 @@ class AnnotationV2Store:
         self._apply_generation_prompts(task, items)
         write_json_file(self._items_path(task), items)
         self._records_dir_path(task).mkdir(parents=True, exist_ok=True)
+        self._refresh_summary_snapshot(task)
         with self._state_lock:
             state = self._read_state()
             state.setdefault("tasks", []).append(task)
@@ -1160,6 +1224,9 @@ class AnnotationV2Store:
 
     def list_tasks(self) -> list[dict[str, Any]]:
         return [self._task_payload(task) for task in self._read_state().get("tasks", [])]
+
+    def get_task(self, task_id: str) -> dict[str, Any]:
+        return self._task_payload(self._require_task(task_id))
 
     def warm_preview_cache(self, task_id: str, progress_callback=None) -> dict[str, Any]:
         task = deepcopy(self._require_task(task_id))
@@ -1334,13 +1401,22 @@ class AnnotationV2Store:
     def _task_payload(self, task: dict[str, Any]) -> dict[str, Any]:
         payload = deepcopy(task)
         payload["label_option_groups"] = deepcopy(LABEL_OPTION_GROUPS)
-        payload["summary"] = self.summary(task["id"])
+        payload["summary"] = self._summary_snapshot(task)
         return payload
 
     def summary(self, task_id: str) -> dict[str, Any]:
         task = self._require_task(task_id)
+        return self._refresh_summary_snapshot(task)
+
+    def _calculate_summary(self, task: dict[str, Any]) -> dict[str, Any]:
+        summary_started_at = time.perf_counter()
+        step_started_at = time.perf_counter()
         items = self._read_items(task)
+        log_perf_step("summary.read_items", step_started_at, task_id=task["id"], items=len(items))
+        step_started_at = time.perf_counter()
         records = self._read_records(task)
+        log_perf_step("summary.read_records", step_started_at, task_id=task["id"], records=len(records))
+        step_started_at = time.perf_counter()
         rough_target = self._stage_target(task, "rough")
         fine_target = self._stage_target(task, "fine")
         rough_completed = 0
@@ -1371,7 +1447,7 @@ class AnnotationV2Store:
                 sampled += 1
                 if record.get("label"):
                     label_completed += 1
-        return {
+        summary = {
             "total": len(items),
             "rough_annotator_count": rough_target,
             "fine_annotator_count": fine_target,
@@ -1399,6 +1475,9 @@ class AnnotationV2Store:
             "sampled": sampled,
             "label_completed": label_completed,
         }
+        log_perf_step("summary.calculate", step_started_at, task_id=task["id"], items=len(items))
+        log_perf_step("summary.total", summary_started_at, task_id=task["id"], items=len(items), records=len(records))
+        return summary
 
     def list_stage_items(
         self,
@@ -1473,27 +1552,164 @@ class AnnotationV2Store:
         offset: int = 0,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        items = self.list_stage_items(
-            task_id,
-            stage,
-            username=username,
-            include_history=include_history,
-            reserve_open_label_item=reserve_open_label_item,
-        )
-        total = len(items)
+        request_started_at = time.perf_counter()
+        task = self._require_task(task_id)
+        stage = str(stage or "rough")
+        username = str(username or "").strip()
+        include_history = bool(include_history and username)
+        step_started_at = time.perf_counter()
+        records = self._read_records(task)
+        log_perf_step("items_page.read_records", step_started_at, task_id=task_id, stage=stage, records=len(records))
+        step_started_at = time.perf_counter()
+        items = self._read_items(task)
+        log_perf_step("items_page.read_items", step_started_at, task_id=task_id, stage=stage, items=len(items))
+        now = utc_now()
+        if stage == "label" and reserve_open_label_item and username:
+            records_path = self._records_dir_path(task) / ".bulk-update.lock"
+            with json_write_lock(records_path):
+                step_started_at = time.perf_counter()
+                records = self._read_records(task)
+                log_perf_step("items_page.label_claim.read_records", step_started_at, task_id=task_id, stage=stage, records=len(records))
+                changed = self._clear_expired_label_claims(records, now)
+                if not any(
+                    self._has_active_label_claim_for_user(record, username, now)
+                    for record in records.values()
+                    if isinstance(record, dict) and not record.get("label")
+                ):
+                    for item, record in self._stage_item_entries(task, items, records, stage, username, include_history, now):
+                        if not record.get("label") and not self._label_claimed_by_other(record, username, now):
+                            item_record = records.setdefault(str(int(item["item_index"])), {})
+                            item_record["label_claim"] = {"username": username, "claimed_at": now}
+                            changed = True
+                            break
+                if changed:
+                    self._write_records(task, records)
+        step_started_at = time.perf_counter()
+        entries = self._stage_item_entries(task, items, records, stage, username, include_history, now)
+        log_perf_step("items_page.filter_sort", step_started_at, task_id=task_id, stage=stage, total=len(entries))
+        total = len(entries)
         start = min(clean_non_negative_int(offset), total)
         if limit is None:
-            page_items = items[start:]
+            page_entries = entries[start:]
             page_limit = total - start
         else:
             page_limit = clean_positive_int(limit)
-            page_items = items[start:start + page_limit]
+            page_entries = entries[start:start + page_limit]
+        step_started_at = time.perf_counter()
+        page_items = [
+            self._item_payload(task, item, record, stage=stage, username=username)
+            for item, record in page_entries
+        ]
+        log_perf_step("items_page.payload", step_started_at, task_id=task_id, stage=stage, count=len(page_items))
+        log_perf_step("items_page.total", request_started_at, task_id=task_id, stage=stage, offset=start, limit=page_limit, total=total)
         return {
             "items": page_items,
             "total": total,
             "offset": start,
             "limit": page_limit,
         }
+
+    def _stage_item_entries(
+        self,
+        task: dict[str, Any],
+        items: list[dict[str, Any]],
+        records: dict[str, Any],
+        stage: str,
+        username: str,
+        include_history: bool,
+        now: float | None = None,
+    ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        entries = []
+        for item in items:
+            record = records.get(str(item["item_index"]), {})
+            if self._stage_item_visible(task, item, record, stage, username, include_history, now):
+                entries.append((item, record))
+        return self._sort_stage_item_entries(entries, task, records, stage, username, include_history, now)
+
+    def _stage_item_visible(
+        self,
+        task: dict[str, Any],
+        item: dict[str, Any],
+        record: dict[str, Any],
+        stage: str,
+        username: str,
+        include_history: bool,
+        now: float | None = None,
+    ) -> bool:
+        user_screen_annotation = (
+            self._annotation_for_user(record, stage, username) if username and stage in {"rough", "fine"} else None
+        )
+        label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+        has_user_label = bool(username and stage == "label" and label_record.get("username") == username)
+        if stage == "label" and username and not has_user_label and self._label_claimed_by_other(record, username, now):
+            return False
+        if stage == "fine" and (
+            not self._stage_complete(task, record, "rough") or not self._rough_passes(task, record.get("rough"))
+        ):
+            return False
+        if stage == "label" and (
+            not record.get("sampled") or (record.get("label") and not (include_history and has_user_label))
+        ):
+            return False
+        if stage not in {"rough", "fine", "label"}:
+            raise ValueError("未知阶段")
+        if username and stage in {"rough", "fine"}:
+            target = self._stage_target(task, stage)
+            if user_screen_annotation is not None and not include_history:
+                return False
+            if user_screen_annotation is None and self._annotation_count(record, stage) >= target:
+                return False
+        return True
+
+    def _sort_stage_item_entries(
+        self,
+        entries: list[tuple[dict[str, Any], dict[str, Any]]],
+        task: dict[str, Any],
+        records: dict[str, Any],
+        stage: str,
+        username: str,
+        include_history: bool,
+        now: float | None = None,
+    ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        sorted_entries = entries
+        if username and stage in {"rough", "fine"} and entries:
+            offset = self._allocation_offset(username, len(entries))
+            sorted_entries = sorted(
+                entries,
+                key=lambda entry: (
+                    self._annotation_count(records.get(str(entry[0]["item_index"]), {}), stage),
+                    (int(entry[0]["item_index"]) - offset) % max(1, len(entries)),
+                ),
+            )
+        if include_history:
+            if stage == "label":
+                sorted_entries = sorted(
+                    sorted_entries,
+                    key=lambda entry: (
+                        0
+                        if self._has_active_label_claim_for_user(entry[1], username, now)
+                        else 1
+                        if self._record_has_user_annotation(entry[1], stage, username)
+                        else 2
+                    ),
+                )
+            else:
+                sorted_entries = sorted(
+                    sorted_entries,
+                    key=lambda entry: 0 if self._record_has_user_annotation(entry[1], stage, username) else 1,
+                )
+        return sorted_entries
+
+    def _record_has_user_annotation(self, record: dict[str, Any], stage: str, username: str) -> bool:
+        if not username:
+            return False
+        if stage in {"rough", "fine"}:
+            annotation = record.get(stage) if isinstance(record.get(stage), dict) else {}
+            return annotation.get("username") == username
+        if stage == "label":
+            label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+            return label_record.get("username") == username
+        return False
 
     def _list_stage_items_from_loaded(
         self,
@@ -1620,7 +1836,9 @@ class AnnotationV2Store:
         def mutate(item_record: dict[str, Any]) -> dict[str, Any]:
             return self._upsert_screen_annotation(task, item_record, "rough", payload)
 
-        return self._update_record(task, int(item_index), mutate)
+        result = self._update_record(task, int(item_index), mutate)
+        self._mark_summary_stale(task)
+        return result
 
     def save_fine(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
@@ -1631,7 +1849,9 @@ class AnnotationV2Store:
                 raise ValueError("精筛前必须先通过粗筛")
             return self._upsert_screen_annotation(task, item_record, "fine", payload)
 
-        return self._update_record(task, int(item_index), mutate)
+        result = self._update_record(task, int(item_index), mutate)
+        self._mark_summary_stale(task)
+        return result
 
     def save_label(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
@@ -1661,7 +1881,9 @@ class AnnotationV2Store:
             item_record.pop("label_claim", None)
             return deepcopy(item_record["label"])
 
-        return self._update_record(task, int(item_index), mutate)
+        result = self._update_record(task, int(item_index), mutate)
+        self._mark_summary_stale(task)
+        return result
 
     def save_result_labels(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
         task = self._require_task(task_id)
@@ -1704,7 +1926,9 @@ class AnnotationV2Store:
                 "label_revisions": [deepcopy(entry) for entry in revisions if isinstance(entry, dict)],
             }
 
-        return self._update_record(task, int(item_index), mutate)
+        result = self._update_record(task, int(item_index), mutate)
+        self._mark_summary_stale(task)
+        return result
 
     def _screen_record(self, payload: dict[str, Any], allow_empty_issue: bool) -> dict[str, Any]:
         username = normalized_import_username(payload)
@@ -1892,7 +2116,7 @@ class AnnotationV2Store:
             }
 
         result = self._update_records(task, mutate)
-        result["summary"] = self.summary(task_id)
+        result["summary"] = self._refresh_summary_snapshot(task)
         return result
 
     def _sample_bucket(self, task: dict[str, Any], item: dict[str, Any]) -> str:
@@ -2489,6 +2713,26 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.json.ensure_ascii = False
 
 
+@app.before_request
+def start_request_timer():
+    g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def log_request_timing(response):
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is not None:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        app.logger.info(
+            "annotations_v2 request path=%s status=%s elapsed_ms=%.1f",
+            request.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        response.headers["X-Annotation-Elapsed-Ms"] = f"{elapsed_ms:.1f}"
+    return response
+
+
 @app.errorhandler(ValueError)
 def handle_value_error(exc: ValueError):
     return jsonify({"error": str(exc)}), 400
@@ -2527,6 +2771,11 @@ def sample_page(task_id: str):
 @app.get("/api/tasks")
 def api_tasks():
     return jsonify({"tasks": store.list_tasks()})
+
+
+@app.get("/api/tasks/<task_id>")
+def api_task(task_id: str):
+    return jsonify({"task": store.get_task(task_id)})
 
 
 @app.post("/api/tasks")
@@ -2678,14 +2927,32 @@ def api_download(task_id: str):
 def api_image(task_id: str, item_index: int, kind: str):
     if kind not in {"src", "dst"}:
         abort(404)
+    step_started_at = time.perf_counter()
     image_path = store.image_path(task_id, item_index, kind)
+    log_perf_step("image.path_lookup", step_started_at, task_id=task_id, item_index=item_index, kind=kind)
     if not image_path.exists() or not image_path.is_file():
         abort(404)
     mimetype = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
     if truthy(request.args.get("original")):
         return send_file(image_path.resolve(), mimetype=mimetype)
-    preview_path, preview_mimetype = resized_image_file(image_path, store.preview_cache_dir(task_id))
-    return send_file(preview_path, mimetype=preview_mimetype, conditional=True)
+    step_started_at = time.perf_counter()
+    cached_preview = cached_resized_image_file(image_path, store.preview_cache_dir(task_id))
+    log_perf_step(
+        "image.cache_lookup",
+        step_started_at,
+        task_id=task_id,
+        item_index=item_index,
+        kind=kind,
+        hit=bool(cached_preview),
+    )
+    if cached_preview:
+        preview_path, preview_mimetype = cached_preview
+        response = send_file(preview_path, mimetype=preview_mimetype, conditional=True)
+        response.headers["X-Annotation-Preview-Cache"] = "hit"
+        return response
+    response = send_file(image_path.resolve(), mimetype=mimetype, conditional=True)
+    response.headers["X-Annotation-Preview-Cache"] = "miss"
+    return response
 
 
 if __name__ == "__main__":
