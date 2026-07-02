@@ -18,7 +18,7 @@ from typing import Any
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from web.annotations.app import AnnotationStore
-from web.annotations_v2.app import AnnotationV2Store, sanitize_labels, utc_now
+from web.annotations_v2.app import AnnotationV2Store, utc_now
 
 
 PATH_ANCHORS = ("原始图片", "生成图片")
@@ -128,74 +128,6 @@ def screen_annotation_from_v1(annotation: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def active_qc_history(annotation: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        entry
-        for entry in annotation.get("qc_history", [])
-        if isinstance(entry, dict) and not entry.get("undone_at")
-    ]
-
-
-def label_revision(
-    username: str,
-    updated_at: Any,
-    before: dict[str, Any],
-    after: dict[str, Any],
-    source: str,
-) -> dict[str, Any]:
-    return {
-        "id": str(updated_at) + ":" + username + ":" + source,
-        "username": username or "imported",
-        "updated_at": timestamp_or_now(updated_at),
-        "before": sanitize_labels(before),
-        "after": sanitize_labels(after),
-        "source": source,
-    }
-
-
-def label_state_from_v1_annotation(
-    item: dict[str, Any],
-    annotation: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    history = active_qc_history(annotation)
-    original_labels = sanitize_labels(item.get("labels", {}))
-    if history and isinstance(history[0].get("before"), dict):
-        initial_tags = sanitize_labels(history[0]["before"].get("tags", {}))
-    else:
-        initial_tags = sanitize_labels(annotation.get("tags", {}))
-
-    revisions = [
-        label_revision(
-            str(annotation.get("username") or "imported").strip() or "imported",
-            annotation.get("updated_at"),
-            original_labels,
-            initial_tags,
-            "annotations_v1_annotation",
-        )
-    ]
-    for entry in history:
-        before = entry.get("before") if isinstance(entry.get("before"), dict) else {}
-        after = entry.get("after") if isinstance(entry.get("after"), dict) else {}
-        revisions.append(
-            label_revision(
-                str(entry.get("username") or "imported").strip() or "imported",
-                entry.get("updated_at"),
-                before.get("tags", {}),
-                after.get("tags", {}),
-                "annotations_v1_qc",
-            )
-        )
-
-    final_labels = sanitize_labels(annotation.get("tags", {}))
-    last_revision = revisions[-1] if revisions else {}
-    label = {
-        "username": str(last_revision.get("username") or annotation.get("username") or "imported"),
-        "labels": final_labels,
-        "updated_at": timestamp_or_now(last_revision.get("updated_at") or annotation.get("updated_at")),
-    }
-    return label, revisions
-
-
 def mark_v2_task_source(
     v2_store: AnnotationV2Store,
     v2_task_id: str,
@@ -241,36 +173,19 @@ def create_v2_task_from_v1(
     return mark_v2_task_source(v2_store, created["id"], v1_task)
 
 
-def should_write_fine(annotation: dict[str, Any], mos_pass_min: int, fine_policy: str) -> bool:
-    if fine_policy == "none":
-        return False
-    if fine_policy == "all":
-        return True
-    return clean_mos(annotation.get("mos")) >= int(mos_pass_min)
-
-
 def write_v2_record_from_v1_annotation(
     v2_store: AnnotationV2Store,
     v2_task: dict[str, Any],
     item_index: int,
-    item: dict[str, Any],
     annotation: dict[str, Any],
-    mos_pass_min: int,
-    fine_policy: str,
 ) -> None:
     screen_annotation = screen_annotation_from_v1(annotation)
-    label, revisions = label_state_from_v1_annotation(item, annotation)
 
     def mutate(item_record: dict[str, Any]) -> None:
         item_record["rough_annotations"] = [deepcopy(screen_annotation)]
         item_record["rough"] = v2_store._aggregate_screen_annotations(v2_task, "rough", [screen_annotation])
-        if should_write_fine(annotation, mos_pass_min, fine_policy):
-            item_record["fine_annotations"] = [deepcopy(screen_annotation)]
-            item_record["fine"] = v2_store._aggregate_screen_annotations(v2_task, "fine", [screen_annotation])
-        item_record["sampled"] = True
-        item_record["sample_bucket"] = v2_store._sample_bucket(v2_task, item)
-        item_record["label"] = deepcopy(label)
-        item_record["label_revisions"] = deepcopy(revisions)
+        for field in ("fine_annotations", "fine", "sampled", "sample_bucket", "label", "label_revisions"):
+            item_record.pop(field, None)
 
     v2_store._update_record(v2_task, item_index, mutate)
 
@@ -282,7 +197,7 @@ def migrate_one_task(
     *,
     apply: bool,
     mos_pass_min: int,
-    fine_policy: str,
+    target_v2_task: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     annotations = v1_store._read_annotations(v1_task)
     stats = {
@@ -294,7 +209,7 @@ def migrate_one_task(
     if not apply:
         return stats
 
-    v2_task = create_v2_task_from_v1(v2_store, v1_task, mos_pass_min)
+    v2_task = target_v2_task or create_v2_task_from_v1(v2_store, v1_task, mos_pass_min)
     v1_items = v1_store._read_items(v1_task)
     v2_items = v2_store._read_items(v2_task)
     target_index, duplicate_target_pairs = build_target_index(v2_items, v2_task.get("root_dir", ""))
@@ -310,15 +225,11 @@ def migrate_one_task(
         if target_item_index is None:
             stats["unmatched_annotations"] += 1
             continue
-        target_item = v2_store._read_item(v2_task, target_item_index)
         write_v2_record_from_v1_annotation(
             v2_store,
             v2_task,
             target_item_index,
-            target_item,
             annotation,
-            mos_pass_min,
-            fine_policy,
         )
         stats["annotations_migrated"] += 1
     return stats
@@ -331,7 +242,7 @@ def migrate_v1_tasks_to_v2(
     *,
     apply: bool = False,
     mos_pass_min: int = 4,
-    fine_policy: str = "pass-only",
+    repair_existing: bool = False,
 ) -> dict[str, int]:
     v1_store = AnnotationStore(v1_state_path)
     v2_store = AnnotationV2Store(v2_state_path)
@@ -341,6 +252,7 @@ def migrate_v1_tasks_to_v2(
     stats = {
         "tasks_seen": len(tasks),
         "tasks_migrated": 0,
+        "tasks_repaired_existing": 0,
         "tasks_skipped_existing": 0,
         "annotations_seen": 0,
         "annotations_migrated": 0,
@@ -356,8 +268,20 @@ def migrate_v1_tasks_to_v2(
             "unmatched_annotations": 0,
             "duplicate_target_pairs": 0,
         }
-        if v2_task_for_source(v2_state, v1_task):
-            stats["tasks_skipped_existing"] += 1
+        existing_v2_task = v2_task_for_source(v2_state, v1_task)
+        if existing_v2_task:
+            if apply and repair_existing:
+                task_stats = migrate_one_task(
+                    v1_store,
+                    v2_store,
+                    v1_task,
+                    apply=apply,
+                    mos_pass_min=mos_pass_min,
+                    target_v2_task=existing_v2_task,
+                )
+                stats["tasks_repaired_existing"] += 1
+            else:
+                stats["tasks_skipped_existing"] += 1
         else:
             task_stats = migrate_one_task(
                 v1_store,
@@ -365,7 +289,6 @@ def migrate_v1_tasks_to_v2(
                 v1_task,
                 apply=apply,
                 mos_pass_min=mos_pass_min,
-                fine_policy=fine_policy,
             )
             if apply:
                 stats["tasks_migrated"] += 1
@@ -383,12 +306,11 @@ def main() -> None:
     parser.add_argument("--v2-state", default=str(DEFAULT_V2_STATE), help="Path to annotation v2 state.json.")
     parser.add_argument("--task", action="append", default=None, help="v1 task id/name to migrate, or all. Can be repeated.")
     parser.add_argument("--apply", action="store_true", help="Write v2 tasks and records. Without this flag, runs a dry-run.")
-    parser.add_argument("--mos-pass-min", type=int, default=4, help="MOS threshold for pass-only fine migration.")
+    parser.add_argument("--mos-pass-min", type=int, default=4, help="MOS pass threshold stored in the created v2 task config.")
     parser.add_argument(
-        "--fine-policy",
-        choices=["pass-only", "all", "none"],
-        default="pass-only",
-        help="How to populate v2 fine records from v1 annotations.",
+        "--repair-existing",
+        action="store_true",
+        help="Rewrite already migrated v1-source v2 tasks as rough-only records instead of skipping them.",
     )
     args = parser.parse_args()
     stats = migrate_v1_tasks_to_v2(
@@ -397,7 +319,7 @@ def main() -> None:
         task_refs=args.task,
         apply=args.apply,
         mos_pass_min=args.mos_pass_min,
-        fine_policy=args.fine_policy,
+        repair_existing=args.repair_existing,
     )
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 
