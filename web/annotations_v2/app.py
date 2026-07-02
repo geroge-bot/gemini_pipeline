@@ -591,6 +591,9 @@ class AnnotationV2Store:
     def _summary_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "summary.json"
 
+    def _issues_path(self, task: dict[str, Any]) -> Path:
+        return Path(task["data_dir"]) / "issues.json"
+
     def _records_dir_path(self, task: dict[str, Any]) -> Path:
         return Path(task["data_dir"]) / "records"
 
@@ -625,6 +628,19 @@ class AnnotationV2Store:
         if not task:
             raise KeyError("task not found")
         return task
+
+    def _read_issues(self, task: dict[str, Any]) -> list[dict[str, Any]]:
+        issues = read_json_file(self._issues_path(task), [])
+        return [issue for issue in issues if isinstance(issue, dict)] if isinstance(issues, list) else []
+
+    def _write_issues(self, task: dict[str, Any], issues: list[dict[str, Any]]) -> None:
+        write_json_file(self._issues_path(task), issues)
+
+    def _require_issue(self, issues: list[dict[str, Any]], issue_id: str) -> dict[str, Any]:
+        issue = next((entry for entry in issues if entry.get("id") == issue_id), None)
+        if issue is None:
+            raise KeyError("issue not found")
+        return issue
 
     def _items_cache_signature(self, path: Path) -> tuple[int, int]:
         stat = path.stat()
@@ -2595,6 +2611,199 @@ class AnnotationV2Store:
         log_perf_step("results_filter_options.total", request_started_at, task_id=task_id, items=len(items), records=len(records))
         return payload
 
+    def _issue_snapshot(self, task: dict[str, Any], item_index: int) -> dict[str, Any]:
+        item = self._read_item(task, int(item_index))
+        record = self._read_record(task, int(item_index))
+        return self._unified_result_row(task, item, record)
+
+    def _issue_assignee(self, snapshot: dict[str, Any], stage: str | None = None) -> tuple[str, str]:
+        stage_order = [stage] if stage in {"rough", "fine", "label"} else ["label", "fine", "rough"]
+        for candidate_stage in stage_order:
+            if candidate_stage == "label":
+                label_record = snapshot.get("label") if isinstance(snapshot.get("label"), dict) else {}
+                username = str(label_record.get("username") or "").strip()
+            else:
+                stage_record = snapshot.get(candidate_stage) if isinstance(snapshot.get(candidate_stage), dict) else {}
+                username = str(stage_record.get("username") or "").split(",")[0].strip()
+                if not username:
+                    annotations = snapshot.get(f"{candidate_stage}_annotations") or []
+                    latest = next(
+                        (
+                            annotation
+                            for annotation in reversed(annotations)
+                            if isinstance(annotation, dict) and str(annotation.get("username") or "").strip()
+                        ),
+                        {},
+                    )
+                    username = str(latest.get("username") or "").strip()
+            if username:
+                return username, str(candidate_stage)
+        return "", str(stage or "")
+
+    def create_issue(
+        self,
+        task_id: str,
+        item_index: int,
+        created_by: str,
+        title: str = "",
+        body: str = "",
+        stage: str | None = None,
+    ) -> dict[str, Any]:
+        created_by = str(created_by or "").strip()
+        if not created_by:
+            raise ValueError("created_by is required")
+        task = self._require_task(task_id)
+        snapshot = self._issue_snapshot(task, int(item_index))
+        assigned_to, assigned_stage = self._issue_assignee(snapshot, str(stage or "").strip() or None)
+        now = utc_now()
+        issue = {
+            "id": str(uuid.uuid4()),
+            "status": "open",
+            "title": str(title or "").strip() or "请检查该条结果",
+            "body": str(body or "").strip(),
+            "item_index": int(item_index),
+            "created_by": created_by,
+            "assigned_to": assigned_to,
+            "assigned_stage": assigned_stage,
+            "created_at": now,
+            "updated_at": now,
+            "closed_at": None,
+            "closed_by": None,
+            "answers": [],
+            "snapshot": snapshot,
+        }
+        issues_path = self._issues_path(task)
+        with json_write_lock(issues_path):
+            issues = self._read_issues(task)
+            issues.append(issue)
+            self._write_issues(task, issues)
+        return deepcopy(issue)
+
+    def list_issues(
+        self,
+        task_id: str,
+        status: str | None = None,
+        assignee: str | None = None,
+    ) -> list[dict[str, Any]]:
+        task = self._require_task(task_id)
+        issues = sorted(self._read_issues(task), key=lambda issue: issue.get("created_at", 0), reverse=True)
+        status_value = str(status or "").strip()
+        assignee_value = str(assignee or "").strip()
+        if status_value:
+            issues = [issue for issue in issues if issue.get("status") == status_value]
+        if assignee_value:
+            issues = [issue for issue in issues if issue.get("assigned_to") == assignee_value]
+        return deepcopy(issues)
+
+    def add_issue_answer(self, task_id: str, issue_id: str, author: str, body: str) -> dict[str, Any]:
+        author = str(author or "").strip()
+        body = str(body or "").strip()
+        if not author:
+            raise ValueError("author is required")
+        if not body:
+            raise ValueError("answer body is required")
+        task = self._require_task(task_id)
+        issues_path = self._issues_path(task)
+        with json_write_lock(issues_path):
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            now = utc_now()
+            issue.setdefault("answers", []).append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "author": author,
+                    "body": body,
+                    "created_at": now,
+                }
+            )
+            issue["updated_at"] = now
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def close_issue(self, task_id: str, issue_id: str, username: str) -> dict[str, Any]:
+        username = str(username or "").strip()
+        if not username:
+            raise ValueError("username is required")
+        task = self._require_task(task_id)
+        issues_path = self._issues_path(task)
+        with json_write_lock(issues_path):
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            now = utc_now()
+            issue["status"] = "closed"
+            issue["closed_at"] = now
+            issue["closed_by"] = username
+            issue["updated_at"] = now
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def reopen_issue(self, task_id: str, issue_id: str, username: str) -> dict[str, Any]:
+        username = str(username or "").strip()
+        if not username:
+            raise ValueError("username is required")
+        task = self._require_task(task_id)
+        issues_path = self._issues_path(task)
+        with json_write_lock(issues_path):
+            issues = self._read_issues(task)
+            issue = self._require_issue(issues, issue_id)
+            issue["status"] = "open"
+            issue["closed_at"] = None
+            issue["closed_by"] = None
+            issue["updated_at"] = utc_now()
+            self._write_issues(task, issues)
+            return deepcopy(issue)
+
+    def export_issues_markdown(self, task_id: str) -> str:
+        task = self._require_task(task_id)
+        issues = sorted(self._read_issues(task), key=lambda issue: issue.get("created_at", 0))
+        lines = [f"# Issues for {task['name']}", ""]
+        if not issues:
+            lines.extend(["No issues.", ""])
+            return "\n".join(lines)
+        for issue in issues:
+            snapshot = issue.get("snapshot") if isinstance(issue.get("snapshot"), dict) else {}
+            lines.extend(
+                [
+                    f"## {issue.get('title') or 'Untitled issue'}",
+                    "",
+                    f"- ID: {issue.get('id')}",
+                    f"- Status: {issue.get('status')}",
+                    f"- Item Index: {issue.get('item_index')}",
+                    f"- Created By: {issue.get('created_by')}",
+                    f"- Assignee: {issue.get('assigned_to') or ''}",
+                    f"- Assigned Stage: {issue.get('assigned_stage') or ''}",
+                    f"- Closed By: {issue.get('closed_by') or ''}",
+                    f"- Source Image: {snapshot.get('src_image') or ''}",
+                    f"- Destination Image: {snapshot.get('dst_image') or ''}",
+                    "",
+                    "### Question",
+                    "",
+                    issue.get("body") or "",
+                    "",
+                    "### Snapshot",
+                    "",
+                    "```json",
+                    json.dumps(snapshot, ensure_ascii=False, indent=2),
+                    "```",
+                    "",
+                    "### Answers",
+                    "",
+                ]
+            )
+            answers = issue.get("answers") or []
+            if not answers:
+                lines.extend(["No answers.", ""])
+            for answer in answers:
+                lines.extend(
+                    [
+                        f"#### {answer.get('author') or 'unknown'}",
+                        "",
+                        answer.get("body") or "",
+                        "",
+                    ]
+                )
+        return "\n".join(lines)
+
     def get_visualization_results(
         self,
         task_id: str,
@@ -2911,6 +3120,68 @@ def api_unified_results(task_id: str):
 @app.get("/api/tasks/<task_id>/results/filter-options")
 def api_unified_result_filter_options(task_id: str):
     return jsonify({"filter_options": store.get_unified_filter_options(task_id)})
+
+
+@app.get("/api/tasks/<task_id>/issues")
+def api_list_issues(task_id: str):
+    return jsonify(
+        {
+            "issues": store.list_issues(
+                task_id,
+                status=request.args.get("status"),
+                assignee=request.args.get("assignee"),
+            )
+        }
+    )
+
+
+@app.post("/api/tasks/<task_id>/issues")
+def api_create_issue(task_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.create_issue(
+        task_id,
+        int(data.get("item_index")),
+        data.get("created_by", ""),
+        data.get("title", ""),
+        data.get("body", ""),
+        stage=data.get("stage"),
+    )
+    return jsonify({"issue": issue}), 201
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/answers")
+def api_add_issue_answer(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.add_issue_answer(task_id, issue_id, data.get("author", ""), data.get("body", ""))
+    return jsonify({"issue": issue})
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/close")
+def api_close_issue(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.close_issue(task_id, issue_id, data.get("username", ""))
+    return jsonify({"issue": issue})
+
+
+@app.post("/api/tasks/<task_id>/issues/<issue_id>/reopen")
+def api_reopen_issue(task_id: str, issue_id: str):
+    data = request.get_json(force=True) or {}
+    issue = store.reopen_issue(task_id, issue_id, data.get("username", ""))
+    return jsonify({"issue": issue})
+
+
+@app.get("/api/tasks/<task_id>/issues/export.md")
+def api_export_issues_markdown(task_id: str):
+    task = store._require_task(task_id)
+    content = store.export_issues_markdown(task_id)
+    output = BytesIO(content.encode("utf-8"))
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype="text/markdown; charset=utf-8",
+        as_attachment=True,
+        download_name=safe_download_name(task["name"], "issues.md"),
+    )
 
 
 @app.post("/api/tasks/<task_id>/items/<int:item_index>/rough")

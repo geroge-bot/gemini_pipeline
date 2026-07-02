@@ -40,6 +40,8 @@
             <button id="visualizationJumpBtn" class="ghost" type="button">跳转</button>
             <button id="visualizationNextBtn" type="button">下一条</button>
             <button id="openVisualizationFilterBtn" class="ghost" type="button">筛选</button>
+            <button id="createIssueBtn" class="ghost" type="button">提出 Issue</button>
+            <button id="openIssuesBtn" class="ghost" type="button">Issues</button>
           </div>
         </div>
 
@@ -60,6 +62,23 @@
           <aside id="visualizationResultPanel" class="panel visualizationPanel"></aside>
         </div>
       </section>
+
+      <section id="issuesWorkbench" class="workbench hidden">
+        <div class="workHeader">
+          <div>
+            <strong id="issuesTitle"></strong>
+            <span id="issuesSummary"></span>
+          </div>
+          <div class="pager">
+            <button id="backFromIssuesBtn" class="ghost" type="button">返回结果</button>
+            <button id="exportIssuesBtn" class="ghost" type="button">导出 Markdown</button>
+          </div>
+        </div>
+        <div class="issuesLayout">
+          <aside id="issuesList" class="issuesList panel"></aside>
+          <section id="issueDetail" class="issueDetail panel"></section>
+        </div>
+      </section>
     </main>
 
     <div id="visualizationFilterOverlay" class="drawerOverlay hidden"></div>
@@ -74,6 +93,30 @@
         <button id="applyVisualizationFilterBtn" type="button">筛选</button>
       </div>
     </aside>
+  </div>
+
+  <div id="issueModal" class="modalOverlay hidden" aria-hidden="true">
+    <form id="issueForm" class="issueModalCard">
+      <div class="sectionHead">
+        <h2>提出 Issue</h2>
+        <button id="cancelIssueBtn" class="ghost" type="button">取消</button>
+      </div>
+      <input id="issueTitleInput" placeholder="Issue 标题">
+      <label>
+        关联阶段
+        <select id="issueStageSelect">
+          <option value="">自动分配</option>
+          <option value="rough">粗筛</option>
+          <option value="fine">精筛</option>
+          <option value="label">标签</option>
+        </select>
+      </label>
+      <textarea id="issueBodyInput" rows="5" placeholder="描述你发现的问题"></textarea>
+      <div class="modalActions">
+        <span id="issueAssigneeHint" class="metaText"></span>
+        <button type="submit">提交 Issue</button>
+      </div>
+    </form>
   </div>
 
   <div id="toast" class="toast hidden"></div>

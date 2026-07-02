@@ -1490,6 +1490,124 @@ def test_v2_label_stage_reserves_open_item_for_current_user():
         annotations_v2_app.store = old_store
 
 
+def test_v2_issue_creation_assigns_from_unified_result_and_snapshots_context():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {"输入图": {"菜品种类": "中餐"}},
+            }
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "issue task",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+    store.save_rough(task["id"], 0, {"username": "rough_user", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "fine_user", "mos": 4, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+    store.save_label(task["id"], 0, {"username": "label_user", "labels": {"输入图": {"菜品种类": "西餐"}}})
+
+    issue = store.create_issue(task["id"], 0, "reviewer", "检查标签", "这个标签需要确认")
+
+    assert issue["status"] == "open"
+    assert issue["created_by"] == "reviewer"
+    assert issue["assigned_to"] == "label_user"
+    assert issue["assigned_stage"] == "label"
+    assert issue["item_index"] == 0
+    assert issue["snapshot"]["src_image"] == "src/a.jpg"
+    assert issue["snapshot"]["dst_image"] == "dst/a.jpg"
+    assert issue["snapshot"]["rough"]["username"] == "rough_user"
+    assert issue["snapshot"]["fine"]["username"] == "fine_user"
+    assert issue["snapshot"]["label"]["username"] == "label_user"
+    assert issue["snapshot"]["effective_labels"] == {"输入图": {"菜品种类": "西餐"}}
+    assert issue["snapshot"]["status"]["label_completed"] is True
+    assert (Path(task["data_dir"]) / "issues.json").exists()
+    assert store.list_issues(task["id"])[0]["id"] == issue["id"]
+
+
+def test_v2_issue_stage_assignment_answers_status_and_markdown_export():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"name": "issue export", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "bob", "mos": 5, "has_defect": False})
+
+    issue = store.create_issue(task["id"], 0, "reviewer", "", "请看这里", stage="rough")
+    answered = store.add_issue_answer(task["id"], issue["id"], "alice", "[dst: x=0.100 y=0.200 w=0.300 h=0.400]")
+    closed = store.close_issue(task["id"], issue["id"], "reviewer")
+    reopened = store.reopen_issue(task["id"], issue["id"], "reviewer")
+    markdown = store.export_issues_markdown(task["id"])
+
+    assert issue["title"] == "请检查该条结果"
+    assert issue["assigned_to"] == "alice"
+    assert issue["assigned_stage"] == "rough"
+    assert answered["answers"][0]["author"] == "alice"
+    assert closed["status"] == "closed"
+    assert closed["closed_by"] == "reviewer"
+    assert reopened["status"] == "open"
+    assert reopened["closed_by"] is None
+    assert "# Issues for issue export" in markdown
+    assert "- Item Index: 0" in markdown
+    assert "- Assigned Stage: rough" in markdown
+    assert "[dst: x=0.100 y=0.200 w=0.300 h=0.400]" in markdown
+
+
+def test_v2_issue_api_endpoints_create_answer_close_reopen_and_export_markdown():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        task = annotations_v2_app.store.create_task({"name": "issue api", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+        annotations_v2_app.store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+        client = annotations_v2_app.app.test_client()
+
+        create_response = client.post(
+            f"/api/tasks/{task['id']}/issues",
+            json={"item_index": 0, "created_by": "reviewer", "title": "API issue", "body": "body", "stage": "rough"},
+        )
+        issue = create_response.get_json()["issue"]
+        list_response = client.get(f"/api/tasks/{task['id']}/issues")
+        answer_response = client.post(
+            f"/api/tasks/{task['id']}/issues/{issue['id']}/answers",
+            json={"author": "alice", "body": "done"},
+        )
+        close_response = client.post(f"/api/tasks/{task['id']}/issues/{issue['id']}/close", json={"username": "reviewer"})
+        reopen_response = client.post(f"/api/tasks/{task['id']}/issues/{issue['id']}/reopen", json={"username": "reviewer"})
+        export_response = client.get(f"/api/tasks/{task['id']}/issues/export.md")
+
+        assert create_response.status_code == 201
+        assert list_response.get_json()["issues"][0]["id"] == issue["id"]
+        assert answer_response.get_json()["issue"]["answers"][0]["body"] == "done"
+        assert close_response.get_json()["issue"]["status"] == "closed"
+        assert reopen_response.get_json()["issue"]["status"] == "open"
+        assert export_response.status_code == 200
+        assert b"# Issues for issue api" in export_response.data
+    finally:
+        annotations_v2_app.store = old_store
+
+
 def test_v2_sampling_buckets_support_selected_counts_and_select_all():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -2936,6 +3054,39 @@ def test_v2_visualization_frontend_exposes_filter_controls():
     assert 'input.dataset.visualizationFilterType === "label"' in script
     assert '$("visualizationFilterOverlay").classList.remove("hidden")' in script
     assert '$("visualizationFilterOverlay").classList.add("hidden")' in script
+
+
+def test_v2_visualization_frontend_exposes_issue_workflow():
+    visualize_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "visualize.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+    styles = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="openIssuesBtn"' in visualize_template
+    assert 'id="createIssueBtn"' in visualize_template
+    assert 'id="issuesWorkbench"' in visualize_template
+    assert 'id="issuesList"' in visualize_template
+    assert 'id="issueDetail"' in visualize_template
+    assert 'id="issueModal"' in visualize_template
+    assert 'id="issueStageSelect"' in visualize_template
+    assert 'id="issueAnswerInput"' in script
+    assert 'api(`/api/tasks/${state.taskId}/issues`' in script
+    assert 'api(`/api/tasks/${state.taskId}/issues/${issue.id}/answers`' in script
+    assert 'window.location.href = `/api/tasks/${state.taskId}/issues/export.md`' in script
+    assert "function openIssuesPage" in script
+    assert "function openIssueModal" in script
+    assert "function submitResultIssue" in script
+    assert "function beginIssueRegionSelection" in script
+    assert "function formatBboxReference" in script
+    assert "issueImageSelection" in styles
+    assert "issuesLayout" in styles
+    assert "issueModalCard" in styles
+
+
+def test_v2_home_task_cards_expose_issue_entry():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'data-action="issues"' in script
+    assert 'href="${`/dataset/visualize/${task.id}?view=issues`}"' in script
 
 
 def test_v2_visualization_filter_options_use_v1_horizontal_bars():

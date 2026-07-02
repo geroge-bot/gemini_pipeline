@@ -9,6 +9,7 @@ Each task has an independent data directory:
 ```text
 data/tasks/<task_id>/
   items.json
+  issues.json
   records/
     <item_index>.json.gz
 ```
@@ -42,6 +43,21 @@ Typical fields are:
 - temporary `label_claim`
 
 Bulk operations such as sampling and JSONL import may update multiple item record files.
+
+## `issues.json`
+
+`issues.json` stores task-scoped review issues created from the unified result page. It is separate from per-item records so listing and exporting issues does not scan every `records/<item_index>.json.gz` shard.
+
+Each issue stores:
+
+- `id`: unique issue id.
+- `status`: `open` or `closed`.
+- `title` and `body`: reviewer question.
+- `item_index`: referenced task item.
+- `created_by`, `assigned_to`, and `assigned_stage`.
+- `created_at`, `updated_at`, `closed_at`, and `closed_by`.
+- `answers`: discussion entries with `author`, `body`, and `created_at`.
+- `snapshot`: the unified result row captured when the issue was created, including image paths, rough/fine records, label state, and workflow status.
 
 ### Label Revision History
 

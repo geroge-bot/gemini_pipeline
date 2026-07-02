@@ -16,6 +16,9 @@ const state = {
   visualizationTotal: 0,
   visualizationFilters: { statuses: [], mos: [], has_defect: [], annotators: [], labels: {} },
   visualizationFilterOptions: { statuses: [], mos: [], has_defect: [], annotators: [], label_options: [] },
+  issues: [],
+  activeIssueId: null,
+  issueSelection: null,
   sampleBuckets: [],
   sampleCandidateCount: 0,
 };
@@ -191,8 +194,10 @@ async function enterApp() {
     return;
   }
   if (state.page === "visualize") {
+    const params = new URLSearchParams(window.location.search);
     await loadTask(state.taskId);
     await openVisualizationPage();
+    if (params.get("view") === "issues") await openIssuesPage();
     return;
   }
   await loadTasks();
@@ -279,6 +284,7 @@ function renderTasks() {
       <div class="pathLine">${escapeHtml(task.jsonl_path)}</div>
       <div class="taskActions">
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}`}">结果展示</a>
+        <a class="buttonLike ghost" data-action="issues" href="${`/dataset/visualize/${task.id}?view=issues`}">Issues</a>
         <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
         <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
         <button class="ghost" data-action="cache-previews" data-id="${task.id}" type="button">缓存图片</button>
@@ -1021,6 +1027,7 @@ async function openVisualizationPage() {
   state.visualizationPage = 0;
   state.activeTask = taskById(state.taskId) || { id: state.taskId, name: state.taskId };
   await reloadVisualizationResults();
+  showVisualizationWorkbench();
   renderVisualizationPage();
   refreshVisualizationFilterOptions().catch((error) => console.warn(error));
 }
@@ -1295,6 +1302,282 @@ function renderLabelRevision(revision) {
       ${renderLabelRows("修改后", revision.after)}
     </article>
   `;
+}
+
+function showVisualizationWorkbench() {
+  $("visualizationWorkbench")?.classList.remove("hidden");
+  $("issuesWorkbench")?.classList.add("hidden");
+}
+
+function showIssuesWorkbench() {
+  $("visualizationWorkbench")?.classList.add("hidden");
+  $("issuesWorkbench")?.classList.remove("hidden");
+}
+
+async function openIssuesPage() {
+  await reloadIssues();
+  showIssuesWorkbench();
+  renderIssuesPage();
+}
+
+async function reloadIssues() {
+  const data = await api(`/api/tasks/${state.taskId}/issues`);
+  state.issues = data.issues || [];
+  if (!state.issues.some((issue) => issue.id === state.activeIssueId)) {
+    state.activeIssueId = state.issues[0]?.id || null;
+  }
+}
+
+function renderIssuesPage() {
+  $("issuesTitle").textContent = `${state.activeTask?.name || state.taskId} · Issues`;
+  const openCount = state.issues.filter((issue) => issue.status === "open").length;
+  $("issuesSummary").textContent = `${openCount} open / ${state.issues.length} total`;
+  renderIssuesList();
+  renderIssueDetail();
+}
+
+function renderIssuesList() {
+  const list = $("issuesList");
+  if (!list) return;
+  if (!state.issues.length) {
+    list.innerHTML = '<div class="metaText">暂无 issue</div>';
+    return;
+  }
+  list.innerHTML = state.issues.map((issue) => `
+    <button class="issueListItem${issue.id === state.activeIssueId ? " active" : ""}" type="button" data-issue-id="${escapeHtml(issue.id)}">
+      <span class="issueStatus ${escapeHtml(issue.status)}">${escapeHtml(issue.status)}</span>
+      <strong>${escapeHtml(issue.title || "Untitled issue")}</strong>
+      <span>提出人 ${escapeHtml(issue.created_by || "")} · 处理人 ${escapeHtml(issue.assigned_to || "未分配")}</span>
+      <span>样本 #${escapeHtml(issue.item_index)} · ${issue.answers?.length || 0} answers</span>
+    </button>
+  `).join("");
+}
+
+function renderIssueDetail() {
+  const detail = $("issueDetail");
+  if (!detail) return;
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) {
+    detail.innerHTML = '<div class="metaText">请选择一个 issue</div>';
+    return;
+  }
+  const snapshot = issue.snapshot || {};
+  detail.innerHTML = `
+    <div class="issueDetailHeader">
+      <div>
+        <h2>${escapeHtml(issue.title || "Untitled issue")}</h2>
+        <div class="metaText">提出人 ${escapeHtml(issue.created_by || "")} · 处理人 ${escapeHtml(issue.assigned_to || "未分配")} · 样本 #${escapeHtml(issue.item_index)}</div>
+      </div>
+      <div class="issueHeaderActions">
+        <button class="ghost" type="button" data-issue-action="open-result">查看结果页</button>
+        <button class="${issue.status === "open" ? "dangerGhost" : "ghost"}" type="button" data-issue-action="${issue.status === "open" ? "close" : "reopen"}">${issue.status === "open" ? "关闭" : "重开"}</button>
+      </div>
+    </div>
+    <section class="issueQuestion">
+      <h3>问题</h3>
+      <p>${escapeHtml(issue.body || "请检查该条结果")}</p>
+    </section>
+    <div class="issueResultGrid">
+      ${renderIssueImage("src", "原图", issue, snapshot.src_relative_path || snapshot.src_image)}
+      ${renderIssueImage("dst", "目标图", issue, snapshot.dst_relative_path || snapshot.dst_image)}
+      <aside class="issueSnapshot">
+        <div class="badgeRow">
+          ${resultBadge(`阶段 ${issue.assigned_stage || "自动"}`)}
+          ${resultBadge(issue.status || "open", issue.status === "closed" ? "fail" : "pass")}
+        </div>
+        ${renderScreeningRecord("粗筛快照", snapshot.rough)}
+        ${renderScreeningRecord("精筛快照", snapshot.fine)}
+        ${renderLabelRows("标签快照", snapshot.effective_labels || snapshot.original_labels)}
+      </aside>
+    </div>
+    <section class="issueAnswers">
+      <h3>回答</h3>
+      <div class="issueAnswerList">
+        ${(issue.answers || []).map((answer) => `
+          <article class="issueAnswer">
+            <strong>${escapeHtml(answer.author || "")}</strong>
+            <span>${escapeHtml(formatTimestamp(answer.created_at))}</span>
+            <p>${escapeHtml(answer.body || "")}</p>
+          </article>
+        `).join("") || '<div class="metaText">暂无回答</div>'}
+      </div>
+      <textarea id="issueAnswerInput" rows="5" placeholder="输入回答，或框选图片区域插入 bbox 引用"></textarea>
+      <div class="issueAnswerActions">
+        <button class="ghost" type="button" data-issue-action="select-src">框选原图</button>
+        <button class="ghost" type="button" data-issue-action="select-dst">框选目标图</button>
+        <button type="button" data-issue-action="answer">提交回答</button>
+      </div>
+    </section>
+  `;
+  preparePreviewImage($("issueSrcImage"), `/api/tasks/${state.taskId}/images/${issue.item_index}/src`);
+  preparePreviewImage($("issueDstImage"), `/api/tasks/${state.taskId}/images/${issue.item_index}/dst`);
+}
+
+function renderIssueImage(kind, title, issue, imagePath) {
+  const id = kind === "src" ? "issueSrcImage" : "issueDstImage";
+  return `
+    <figure class="issueImagePanel">
+      <figcaption>${escapeHtml(title)}</figcaption>
+      <div class="imagePath">${escapeHtml(imagePath || "")}</div>
+      <div class="issueImageShell" data-image-kind="${escapeHtml(kind)}">
+        <img id="${id}" class="issueSelectableImage" data-image-kind="${escapeHtml(kind)}" alt="${escapeHtml(title)} #${escapeHtml(issue.item_index)}" loading="lazy">
+      </div>
+    </figure>
+  `;
+}
+
+function openIssueModal() {
+  const item = currentVisualizationItem();
+  if (!item) return;
+  $("issueTitleInput").value = "请检查该条结果";
+  $("issueStageSelect").value = "";
+  $("issueBodyInput").value = "";
+  $("issueAssigneeHint").textContent = "将根据当前结果自动分配";
+  $("issueModal").classList.remove("hidden");
+  $("issueModal").setAttribute("aria-hidden", "false");
+  $("issueBodyInput").focus();
+}
+
+function closeIssueModal() {
+  $("issueModal").classList.add("hidden");
+  $("issueModal").setAttribute("aria-hidden", "true");
+}
+
+async function submitResultIssue(event) {
+  event.preventDefault();
+  const item = currentVisualizationItem();
+  if (!item) return;
+  const data = await api(`/api/tasks/${state.taskId}/issues`, {
+    method: "POST",
+    body: JSON.stringify({
+      item_index: item.item_index,
+      created_by: state.username,
+      title: $("issueTitleInput").value,
+      body: $("issueBodyInput").value,
+      stage: $("issueStageSelect").value,
+    }),
+  });
+  closeIssueModal();
+  showToast(`Issue 已分配给 ${data.issue.assigned_to || "未分配"}`);
+}
+
+async function submitIssueAnswer() {
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) return;
+  const body = $("issueAnswerInput").value.trim();
+  if (!body) {
+    showToast("请输入回答内容");
+    return;
+  }
+  const data = await api(`/api/tasks/${state.taskId}/issues/${issue.id}/answers`, {
+    method: "POST",
+    body: JSON.stringify({ author: state.username, body }),
+  });
+  replaceIssue(data.issue);
+  renderIssuesPage();
+}
+
+async function setIssueStatus(action) {
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) return;
+  const data = await api(`/api/tasks/${state.taskId}/issues/${issue.id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ username: state.username }),
+  });
+  replaceIssue(data.issue);
+  renderIssuesPage();
+}
+
+function replaceIssue(issue) {
+  state.issues = state.issues.map((item) => item.id === issue.id ? issue : item);
+  state.activeIssueId = issue.id;
+}
+
+async function openIssueResult() {
+  const issue = state.issues.find((item) => item.id === state.activeIssueId);
+  if (!issue) return;
+  state.visualizationFilters = emptyVisualizationFilters();
+  state.visualizationPage = Math.max(0, Number(issue.item_index || 0));
+  await reloadVisualizationResults();
+  showVisualizationWorkbench();
+  renderVisualizationPage();
+}
+
+function exportIssuesMarkdown() {
+  if (!state.taskId) return;
+  window.location.href = `/api/tasks/${state.taskId}/issues/export.md`;
+}
+
+function beginIssueRegionSelection(imageKind) {
+  state.issueSelection = { imageKind };
+  showToast(`在${imageKind === "src" ? "原图" : "目标图"}上拖拽框选区域`);
+}
+
+function handleIssueImageMouseDown(event) {
+  const image = event.target.closest(".issueSelectableImage");
+  if (!image || !state.issueSelection || image.dataset.imageKind !== state.issueSelection.imageKind) return;
+  event.preventDefault();
+  const shell = image.closest(".issueImageShell");
+  const rect = image.getBoundingClientRect();
+  const start = pointInRect(event, rect);
+  const box = document.createElement("div");
+  box.className = "issueImageSelection";
+  shell.appendChild(box);
+
+  const updateBox = (point) => {
+    const left = Math.min(start.x, point.x);
+    const top = Math.min(start.y, point.y);
+    const width = Math.abs(point.x - start.x);
+    const height = Math.abs(point.y - start.y);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+  };
+  const onMove = (moveEvent) => updateBox(pointInRect(moveEvent, rect));
+  const onUp = (upEvent) => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    const end = pointInRect(upEvent, rect);
+    const bbox = normalizedBbox(start, end, rect);
+    box.remove();
+    state.issueSelection = null;
+    if (bbox.w < 0.005 || bbox.h < 0.005) return;
+    insertIssueAnswerText(formatBboxReference(image.dataset.imageKind, bbox));
+  };
+  updateBox(start);
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+function pointInRect(event, rect) {
+  return {
+    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+  };
+}
+
+function normalizedBbox(start, end, rect) {
+  const left = Math.min(start.x, end.x);
+  const top = Math.min(start.y, end.y);
+  return {
+    x: left / rect.width,
+    y: top / rect.height,
+    w: Math.abs(end.x - start.x) / rect.width,
+    h: Math.abs(end.y - start.y) / rect.height,
+  };
+}
+
+function formatBboxReference(imageKind, bbox) {
+  return `[${imageKind}: x=${bbox.x.toFixed(3)} y=${bbox.y.toFixed(3)} w=${bbox.w.toFixed(3)} h=${bbox.h.toFixed(3)}]`;
+}
+
+function insertIssueAnswerText(text) {
+  const input = $("issueAnswerInput");
+  if (!input) return;
+  const prefix = input.value && !input.value.endsWith("\n") ? "\n" : "";
+  input.value = `${input.value}${prefix}${text}`;
+  input.focus();
 }
 
 function flattenLabelRows(value, prefix = []) {
@@ -1612,6 +1895,34 @@ function bindEvents() {
     if (!row || event.target.closest(".qcInlineEditor")) return;
     beginVisualizationLabelEdit(row);
   });
+  $("createIssueBtn")?.addEventListener("click", () => openIssueModal());
+  $("openIssuesBtn")?.addEventListener("click", () => openIssuesPage().catch((error) => showToast(error.message)));
+  $("backFromIssuesBtn")?.addEventListener("click", () => {
+    showVisualizationWorkbench();
+    renderVisualizationPage();
+  });
+  $("exportIssuesBtn")?.addEventListener("click", () => exportIssuesMarkdown());
+  $("issueForm")?.addEventListener("submit", (event) => submitResultIssue(event).catch((error) => showToast(error.message)));
+  $("cancelIssueBtn")?.addEventListener("click", () => closeIssueModal());
+  $("issueModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "issueModal") closeIssueModal();
+  });
+  $("issuesList")?.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-issue-id]");
+    if (!target) return;
+    state.activeIssueId = target.dataset.issueId;
+    renderIssuesPage();
+  });
+  $("issueDetail")?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-issue-action]")?.dataset.issueAction;
+    if (!action) return;
+    if (action === "answer") submitIssueAnswer().catch((error) => showToast(error.message));
+    if (action === "close" || action === "reopen") setIssueStatus(action).catch((error) => showToast(error.message));
+    if (action === "open-result") openIssueResult().catch((error) => showToast(error.message));
+    if (action === "select-src") beginIssueRegionSelection("src");
+    if (action === "select-dst") beginIssueRegionSelection("dst");
+  });
+  $("issueDetail")?.addEventListener("mousedown", (event) => handleIssueImageMouseDown(event));
   $("openVisualizationFilterBtn")?.addEventListener("click", () => openVisualizationFilterPanel());
   $("visualizationFilterOverlay")?.addEventListener("click", () => closeVisualizationFilterPanel());
   $("closeVisualizationFilterBtn")?.addEventListener("click", () => closeVisualizationFilterPanel());
