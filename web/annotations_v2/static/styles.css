@@ -838,6 +838,54 @@ pre {
   font-size: 13px;
 }
 
+.resultEditableLabelRow {
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.1fr) minmax(120px, auto);
+}
+
+.resultLabelValue {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tagMeta {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.qcInlineEditor {
+  width: 100%;
+  min-height: 32px;
+}
+
+.revisionHistory summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.revisionList {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.revisionItem {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.revisionHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .modalOverlay {
   position: fixed;
   inset: 0;

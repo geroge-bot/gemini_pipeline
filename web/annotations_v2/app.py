@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import mimetypes
@@ -33,6 +34,7 @@ OUTPUT_GROUP_NAME = "输出图"
 VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
 TASK_DELETE_ADMIN_USERNAME = "孙本猿"
 LABEL_CLAIM_TTL_SECONDS = 30 * 60
+RECORD_GZIP_COMPRESSLEVEL = 3
 JSON_WRITE_LOCKS: dict[Path, threading.RLock] = {}
 JSON_WRITE_LOCKS_GUARD = threading.Lock()
 CANONICAL_LABEL_DIMENSIONS = {
@@ -143,6 +145,26 @@ def write_json_file(path: Path, data: Any) -> None:
                 tmp_path.unlink()
 
 
+def read_gzip_json_file(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return deepcopy(default)
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def write_gzip_json_file(path: Path, data: Any, compresslevel: int = RECORD_GZIP_COMPRESSLEVEL) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    with json_write_lock(path):
+        try:
+            with gzip.open(tmp_path, "wt", encoding="utf-8", compresslevel=compresslevel) as handle:
+                json.dump(data, handle, ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp_path, path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+
 def label_json_path(root_dir: Path, label_dir: Path, image_path: str) -> Path:
     raw_path = Path(str(image_path))
     image_full_path = raw_path if raw_path.is_absolute() else root_dir / raw_path
@@ -159,8 +181,11 @@ def read_image_labels(root_dir: Path, label_dir: Path, image_path: str) -> dict[
     path = label_json_path(root_dir, label_dir, image_path)
     if not path.exists() or not path.is_file():
         return {}
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"标签 JSON 不是合法 JSON：{path}（{exc}）") from exc
     if not isinstance(data, dict):
         return {}
     labels = data.get("labels")
@@ -332,6 +357,14 @@ def clean_positive_int(value: Any, default: int = 1) -> int:
     except (TypeError, ValueError):
         result = default
     return max(1, result)
+
+
+def clean_non_negative_int(value: Any, default: int = 0) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        result = default
+    return max(0, result)
 
 
 def normalized_import_username(payload: dict[str, Any], default: str = "") -> str:
@@ -514,6 +547,9 @@ class AnnotationV2Store:
             if configured_preview_cache_dir
             else None
         )
+        self._state_lock = threading.RLock()
+        self._items_cache_lock = threading.RLock()
+        self._items_cache: dict[Path, dict[str, Any]] = {}
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.state_path.exists():
             self._write_state({"tasks": []})
@@ -542,7 +578,27 @@ class AnnotationV2Store:
         return Path(task["data_dir"]) / "records"
 
     def _record_item_path(self, task: dict[str, Any], item_index: int | str) -> Path:
+        return self._record_item_gzip_path(task, item_index)
+
+    def _record_item_json_path(self, task: dict[str, Any], item_index: int | str) -> Path:
         return self._records_dir_path(task) / f"{int(item_index)}.json"
+
+    def _record_item_gzip_path(self, task: dict[str, Any], item_index: int | str) -> Path:
+        return self._records_dir_path(task) / f"{int(item_index)}.json.gz"
+
+    def _record_shard_index_and_priority(self, path: Path) -> tuple[int, int] | None:
+        if path.name.endswith(".json.gz"):
+            raw_index = path.name.removesuffix(".json.gz")
+            priority = 1
+        elif path.name.endswith(".json"):
+            raw_index = path.name.removesuffix(".json")
+            priority = 0
+        else:
+            return None
+        try:
+            return int(raw_index), priority
+        except ValueError:
+            return None
 
     def _find_task(self, state: dict[str, Any], task_id: str) -> dict[str, Any] | None:
         return next((task for task in state.get("tasks", []) if task.get("id") == task_id), None)
@@ -553,14 +609,35 @@ class AnnotationV2Store:
             raise KeyError("task not found")
         return task
 
+    def _items_cache_signature(self, path: Path) -> tuple[int, int]:
+        stat = path.stat()
+        return stat.st_mtime_ns, stat.st_size
+
+    def _items_cache_entry(self, task: dict[str, Any]) -> dict[str, Any]:
+        path = self._items_path(task)
+        signature = self._items_cache_signature(path)
+        with self._items_cache_lock:
+            cached = self._items_cache.get(path)
+            if cached and cached.get("signature") == signature:
+                return cached
+
+            items = read_json_file(path, [])
+            by_index: dict[int, dict[str, Any]] = {}
+            for item in items:
+                if isinstance(item, dict):
+                    item["labels"] = sanitize_labels(item.get("labels", {}))
+                    item.setdefault("generation_prompt", "")
+                    item.setdefault("generation_prompt_json_path", "")
+                    try:
+                        by_index[int(item.get("item_index"))] = item
+                    except (TypeError, ValueError):
+                        continue
+            cached = {"signature": signature, "items": items, "by_index": by_index}
+            self._items_cache[path] = cached
+            return cached
+
     def _read_items(self, task: dict[str, Any]) -> list[dict[str, Any]]:
-        items = read_json_file(self._items_path(task), [])
-        for item in items:
-            if isinstance(item, dict):
-                item["labels"] = sanitize_labels(item.get("labels", {}))
-                item.setdefault("generation_prompt", "")
-                item.setdefault("generation_prompt_json_path", "")
-        return items
+        return deepcopy(self._items_cache_entry(task)["items"])
 
     def _generation_prompt_for_item(
         self,
@@ -624,19 +701,29 @@ class AnnotationV2Store:
         records_dir = self._records_dir_path(task)
         if not records_dir.exists() or not records_dir.is_dir():
             return records
-        for path in sorted(records_dir.glob("*.json"), key=lambda item: item.stem):
-            try:
-                item_index = str(int(path.stem))
-            except ValueError:
+        candidates = []
+        for path in records_dir.iterdir():
+            parsed = self._record_shard_index_and_priority(path)
+            if parsed is None:
                 continue
-            record = read_json_file(path, {})
+            item_index, priority = parsed
+            candidates.append((item_index, priority, path))
+        for item_index, _priority, path in sorted(candidates, key=lambda entry: (entry[0], entry[1], entry[2].name)):
+            if path.name.endswith(".json.gz"):
+                record = read_gzip_json_file(path, {})
+            else:
+                record = read_json_file(path, {})
             if isinstance(record, dict):
-                records[item_index] = record
+                records[str(item_index)] = record
         return records
 
     def _read_record(self, task: dict[str, Any], item_index: int) -> dict[str, Any]:
         key = str(int(item_index))
-        item_record_path = self._record_item_path(task, int(item_index))
+        item_record_path = self._record_item_gzip_path(task, int(item_index))
+        if item_record_path.exists():
+            item_record = read_gzip_json_file(item_record_path, {})
+            return item_record if isinstance(item_record, dict) else {}
+        item_record_path = self._record_item_json_path(task, int(item_index))
         if item_record_path.exists():
             item_record = read_json_file(item_record_path, {})
             return item_record if isinstance(item_record, dict) else {}
@@ -650,7 +737,10 @@ class AnnotationV2Store:
                 self._write_record(task, int(key), record)
 
     def _write_record(self, task: dict[str, Any], item_index: int, record: dict[str, Any]) -> None:
-        write_json_file(self._record_item_path(task, int(item_index)), record)
+        write_gzip_json_file(self._record_item_gzip_path(task, int(item_index)), record)
+        plain_path = self._record_item_json_path(task, int(item_index))
+        if plain_path.exists():
+            plain_path.unlink()
 
     def _update_records(self, task: dict[str, Any], mutate) -> Any:
         records_path = self._records_dir_path(task) / ".bulk-update.lock"
@@ -993,17 +1083,15 @@ class AnnotationV2Store:
         return bool(claim and claim.get("username") == username)
 
     def _read_item(self, task: dict[str, Any], item_index: int) -> dict[str, Any]:
-        items = self._read_items(task)
+        entry = self._items_cache_entry(task)
         try:
-            item = items[int(item_index)]
-        except (IndexError, ValueError) as exc:
+            normalized_index = int(item_index)
+        except (TypeError, ValueError) as exc:
             raise KeyError("item not found") from exc
-        if int(item.get("item_index")) != int(item_index):
-            for candidate in items:
-                if int(candidate.get("item_index", -1)) == int(item_index):
-                    return candidate
+        item = entry["by_index"].get(normalized_index)
+        if item is None:
             raise KeyError("item not found")
-        return item
+        return deepcopy(item)
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         jsonl_path = Path(str(payload.get("jsonl_path") or "")).expanduser()
@@ -1064,9 +1152,10 @@ class AnnotationV2Store:
         self._apply_generation_prompts(task, items)
         write_json_file(self._items_path(task), items)
         self._records_dir_path(task).mkdir(parents=True, exist_ok=True)
-        state = self._read_state()
-        state.setdefault("tasks", []).append(task)
-        self._write_state(state)
+        with self._state_lock:
+            state = self._read_state()
+            state.setdefault("tasks", []).append(task)
+            self._write_state(state)
         return self._task_payload(task)
 
     def list_tasks(self) -> list[dict[str, Any]]:
@@ -1210,34 +1299,36 @@ class AnnotationV2Store:
         return result
 
     def delete_task(self, task_id: str) -> dict[str, Any]:
-        state = self._read_state()
-        tasks = state.get("tasks", [])
-        task = self._find_task(state, task_id)
-        if not task:
-            raise KeyError("task not found")
-        payload = self._task_payload(task)
-        state["tasks"] = [entry for entry in tasks if entry.get("id") != task_id]
-        self._write_state(state)
+        with self._state_lock:
+            state = self._read_state()
+            tasks = state.get("tasks", [])
+            task = self._find_task(state, task_id)
+            if not task:
+                raise KeyError("task not found")
+            payload = self._task_payload(task)
+            state["tasks"] = [entry for entry in tasks if entry.get("id") != task_id]
+            self._write_state(state)
         return payload
 
     def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        state = self._read_state()
-        task = self._find_task(state, task_id)
-        if not task:
-            raise KeyError("task not found")
+        with self._state_lock:
+            state = self._read_state()
+            task = self._find_task(state, task_id)
+            if not task:
+                raise KeyError("task not found")
 
-        rough_payload = payload.get("rough") if isinstance(payload.get("rough"), dict) else {}
-        if "issue_options" in rough_payload or "issue_options" in payload:
-            task.setdefault("rough", {})["issue_options"] = normalize_issue_options(
-                rough_payload.get("issue_options", payload.get("issue_options", []))
-            )
-        if "selected_label_paths" in payload:
-            task["selected_label_paths"] = normalize_label_paths(payload.get("selected_label_paths"))
-        if "generation_prompt_dir" in payload:
-            task["generation_prompt_dir"] = clean_optional_path(payload.get("generation_prompt_dir"))
-            self._refresh_generation_prompts(task)
+            rough_payload = payload.get("rough") if isinstance(payload.get("rough"), dict) else {}
+            if "issue_options" in rough_payload or "issue_options" in payload:
+                task.setdefault("rough", {})["issue_options"] = normalize_issue_options(
+                    rough_payload.get("issue_options", payload.get("issue_options", []))
+                )
+            if "selected_label_paths" in payload:
+                task["selected_label_paths"] = normalize_label_paths(payload.get("selected_label_paths"))
+            if "generation_prompt_dir" in payload:
+                task["generation_prompt_dir"] = clean_optional_path(payload.get("generation_prompt_dir"))
+                self._refresh_generation_prompts(task)
 
-        self._write_state(state)
+            self._write_state(state)
         return self._task_payload(task)
 
     def _task_payload(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -1371,6 +1462,38 @@ class AnnotationV2Store:
         items = self._read_items(task)
         now = utc_now()
         return self._list_stage_items_from_loaded(task, items, records, stage, username, include_history, now)
+
+    def list_stage_items_page(
+        self,
+        task_id: str,
+        stage: str,
+        username: str = "",
+        include_history: bool = False,
+        reserve_open_label_item: bool = False,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        items = self.list_stage_items(
+            task_id,
+            stage,
+            username=username,
+            include_history=include_history,
+            reserve_open_label_item=reserve_open_label_item,
+        )
+        total = len(items)
+        start = min(clean_non_negative_int(offset), total)
+        if limit is None:
+            page_items = items[start:]
+            page_limit = total - start
+        else:
+            page_limit = clean_positive_int(limit)
+            page_items = items[start:start + page_limit]
+        return {
+            "items": page_items,
+            "total": total,
+            "offset": start,
+            "limit": page_limit,
+        }
 
     def _list_stage_items_from_loaded(
         self,
@@ -1520,6 +1643,9 @@ class AnnotationV2Store:
             username = str(payload.get("username") or "").strip()
             if not username:
                 raise ValueError("username is required")
+            existing_label = item_record.get("label") if isinstance(item_record.get("label"), dict) else {}
+            if existing_label and existing_label.get("username") != username:
+                raise ValueError("该图片已由其他用户完成标签纠错")
             label_claim = self._active_label_claim(item_record)
             if label_claim and label_claim.get("username") != username:
                 raise ValueError("该图片已分配给其他用户进行标签纠错")
@@ -1534,6 +1660,49 @@ class AnnotationV2Store:
             }
             item_record.pop("label_claim", None)
             return deepcopy(item_record["label"])
+
+        return self._update_record(task, int(item_index), mutate)
+
+    def save_result_labels(self, task_id: str, item_index: int, payload: dict[str, Any]) -> dict[str, Any]:
+        task = self._require_task(task_id)
+        item = self._read_item(task, int(item_index))
+
+        def mutate(item_record: dict[str, Any]) -> dict[str, Any]:
+            username = str(payload.get("username") or "").strip()
+            if not username:
+                raise ValueError("username is required")
+            labels = payload.get("labels")
+            if not isinstance(labels, dict):
+                raise ValueError("labels must be an object")
+            labels = selected_sanitized_labels(labels, task.get("selected_label_paths"))
+            if not labels:
+                raise ValueError("labels must include at least one selected label")
+
+            before = self._effective_labels(item, item_record)
+            now = utc_now()
+            revision = {
+                "id": str(uuid.uuid4()),
+                "username": username,
+                "updated_at": now,
+                "before": before,
+                "after": deepcopy(labels),
+                "source": "unified_results",
+            }
+            revisions = item_record.setdefault("label_revisions", [])
+            if not isinstance(revisions, list):
+                revisions = []
+                item_record["label_revisions"] = revisions
+            revisions.append(revision)
+            item_record["label"] = {
+                "username": username,
+                "labels": labels,
+                "updated_at": now,
+            }
+            item_record.pop("label_claim", None)
+            return {
+                **deepcopy(item_record["label"]),
+                "label_revisions": [deepcopy(entry) for entry in revisions if isinstance(entry, dict)],
+            }
 
         return self._update_record(task, int(item_index), mutate)
 
@@ -1956,6 +2125,214 @@ class AnnotationV2Store:
             ],
         }
 
+    def _effective_labels(self, item: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+        labels = deepcopy(item.get("labels", {}))
+        label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+        corrected = label_record.get("labels") if isinstance(label_record.get("labels"), dict) else {}
+        nested_overlay(labels, corrected)
+        return sanitize_labels(labels)
+
+    def _unified_status(self, task: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+        rough_complete = self._stage_complete(task, record, "rough")
+        fine_complete = self._stage_complete(task, record, "fine")
+        rough_passed = rough_complete and self._rough_passes(task, record.get("rough"))
+        fine_passed = fine_complete and self._fine_passes(task, record.get("fine"))
+        return {
+            "rough_completed": rough_complete,
+            "rough_passed": rough_passed,
+            "fine_completed": fine_complete,
+            "fine_passed": fine_passed,
+            "sampled": bool(record.get("sampled")),
+            "label_completed": isinstance(record.get("label"), dict),
+        }
+
+    def _unified_result_row(
+        self,
+        task: dict[str, Any],
+        item: dict[str, Any],
+        record: dict[str, Any],
+    ) -> dict[str, Any]:
+        label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+        revisions = record.get("label_revisions") if isinstance(record.get("label_revisions"), list) else []
+        return {
+            "item_index": item["item_index"],
+            "src_image": item["src_image"],
+            "dst_image": item["dst_image"],
+            "src_relative_path": image_relative_path(task.get("root_dir"), item["src_image"]),
+            "dst_relative_path": image_relative_path(task.get("root_dir"), item["dst_image"]),
+            "generation_prompt": item.get("generation_prompt", ""),
+            "generation_prompt_json_path": item.get("generation_prompt_json_path", ""),
+            "image_urls": {
+                "src": f"/api/tasks/{task['id']}/images/{item['item_index']}/src",
+                "dst": f"/api/tasks/{task['id']}/images/{item['item_index']}/dst",
+            },
+            "original_labels": deepcopy(item.get("labels", {})),
+            "effective_labels": self._effective_labels(item, record),
+            "rough": deepcopy(record.get("rough")) if isinstance(record.get("rough"), dict) else None,
+            "rough_annotations": self._screen_annotations(record, "rough"),
+            "fine": deepcopy(record.get("fine")) if isinstance(record.get("fine"), dict) else None,
+            "fine_annotations": self._screen_annotations(record, "fine"),
+            "sampled": bool(record.get("sampled")),
+            "sample_bucket": record.get("sample_bucket"),
+            "label": deepcopy(label_record) if label_record else None,
+            "label_revisions": [deepcopy(entry) for entry in revisions if isinstance(entry, dict)],
+            "status": self._unified_status(task, record),
+        }
+
+    def _unified_matches_filters(
+        self,
+        task: dict[str, Any],
+        item: dict[str, Any],
+        record: dict[str, Any],
+        filters: dict[str, Any] | None,
+    ) -> bool:
+        if not filters:
+            return True
+
+        status_values = normalize_filter_values(filters.get("statuses"))
+        if status_values:
+            status = self._unified_status(task, record)
+            if not any(status.get(value) for value in status_values):
+                return False
+
+        mos_values = normalize_filter_values(filters.get("mos"))
+        if mos_values:
+            mos_candidates = []
+            for stage in ("rough", "fine"):
+                stage_record = record.get(stage)
+                if isinstance(stage_record, dict) and stage_record.get("mos") is not None:
+                    mos_candidates.append(str(stage_record.get("mos")))
+            if not set(mos_candidates).intersection(mos_values):
+                return False
+
+        defect_values = normalize_filter_values(filters.get("has_defect"))
+        if defect_values:
+            defect_candidates = []
+            for stage in ("rough", "fine"):
+                stage_record = record.get(stage)
+                if isinstance(stage_record, dict) and stage_record.get("has_defect") is not None:
+                    defect_candidates.append(str(bool(stage_record.get("has_defect"))))
+            if not set(defect_candidates).intersection(defect_values):
+                return False
+
+        annotators = normalize_filter_values(filters.get("annotators"))
+        if annotators:
+            names = set()
+            for stage in ("rough", "fine"):
+                for annotation in self._screen_annotations(record, stage):
+                    if annotation.get("username"):
+                        names.add(str(annotation["username"]))
+            label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+            if label_record.get("username"):
+                names.add(str(label_record["username"]))
+            for revision in record.get("label_revisions") or []:
+                if isinstance(revision, dict) and revision.get("username"):
+                    names.add(str(revision["username"]))
+            if not names.intersection(annotators):
+                return False
+
+        effective_labels = self._effective_labels(item, record)
+        for label_filter in filters.get("labels") or []:
+            if not isinstance(label_filter, dict):
+                continue
+            path = label_filter.get("path")
+            if not isinstance(path, list) or not path:
+                continue
+            selected_values = normalize_filter_values(label_filter.get("values"))
+            if not selected_values:
+                continue
+            current_value = nested_get(effective_labels, [str(part) for part in path])
+            current_values = normalize_filter_values(current_value if isinstance(current_value, list) else [current_value])
+            if not current_values.intersection(selected_values):
+                return False
+        return True
+
+    def get_unified_results(
+        self,
+        task_id: str,
+        offset: int = 0,
+        limit: int | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        task = self._require_task(task_id)
+        items = self._read_items(task)
+        records = self._read_records(task)
+        candidates = [
+            item
+            for item in items
+            if self._unified_matches_filters(task, item, records.get(str(item["item_index"]), {}), filters)
+        ]
+        total = len(candidates)
+        start = max(0, int(offset or 0))
+        stop = total if limit is None else min(total, start + max(0, int(limit)))
+        rows = [
+            self._unified_result_row(task, item, records.get(str(item["item_index"]), {}))
+            for item in candidates[start:stop]
+        ]
+        return total, rows
+
+    def get_unified_filter_options(self, task_id: str) -> dict[str, Any]:
+        task = self._require_task(task_id)
+        items = self._read_items(task)
+        records = self._read_records(task)
+        mos_values = set()
+        defect_values = set()
+        annotators = set()
+        label_values: dict[str, dict[str, Any]] = {}
+
+        for item in items:
+            record = records.get(str(item["item_index"]), {})
+            for stage in ("rough", "fine"):
+                stage_record = record.get(stage)
+                if isinstance(stage_record, dict):
+                    if stage_record.get("mos") is not None:
+                        mos_values.add(int(stage_record["mos"]))
+                    if stage_record.get("has_defect") is not None:
+                        defect_values.add(bool(stage_record["has_defect"]))
+                for annotation in self._screen_annotations(record, stage):
+                    if annotation.get("username"):
+                        annotators.add(str(annotation["username"]))
+            label_record = record.get("label") if isinstance(record.get("label"), dict) else {}
+            if label_record.get("username"):
+                annotators.add(str(label_record["username"]))
+            for revision in record.get("label_revisions") or []:
+                if isinstance(revision, dict) and revision.get("username"):
+                    annotators.add(str(revision["username"]))
+
+            effective_labels = self._effective_labels(item, record)
+            for label_path in flatten_label_paths(effective_labels):
+                key = json.dumps(label_path, ensure_ascii=False)
+                entry = label_values.setdefault(key, {"path": label_path, "values": set()})
+                for value in stat_values(nested_get(effective_labels, label_path)):
+                    entry["values"].add(value)
+
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for entry in label_values.values():
+            path = entry["path"]
+            if len(path) < 2:
+                continue
+            group_name = str(path[0])
+            dimension_name = "/".join(str(part) for part in path[1:])
+            groups.setdefault(group_name, []).append({"name": dimension_name, "options": sorted(entry["values"])})
+
+        return {
+            "statuses": [
+                {"value": "rough_completed", "label": "粗筛完成"},
+                {"value": "rough_passed", "label": "粗筛通过"},
+                {"value": "fine_completed", "label": "精筛完成"},
+                {"value": "fine_passed", "label": "精筛通过"},
+                {"value": "sampled", "label": "已采样"},
+                {"value": "label_completed", "label": "已编辑标签"},
+            ],
+            "mos": sorted(mos_values),
+            "has_defect": sorted(defect_values),
+            "annotators": sorted(annotators),
+            "label_options": [
+                {"name": group_name, "dimensions": sorted(dimensions, key=lambda item: item["name"])}
+                for group_name, dimensions in sorted(groups.items())
+            ],
+        }
+
     def get_visualization_results(
         self,
         task_id: str,
@@ -2018,6 +2395,9 @@ class AnnotationV2Store:
                 "corrected_labels": label_record.get("labels"),
                 "label_username": label_record.get("username"),
                 "label_updated_at": label_record.get("updated_at"),
+                "label_revisions": deepcopy(record.get("label_revisions", []))
+                if isinstance(record.get("label_revisions"), list)
+                else [],
             }
             lines.append(json.dumps(row, ensure_ascii=False))
         return "\n".join(lines) + ("\n" if lines else "")
@@ -2190,17 +2570,17 @@ def api_summary(task_id: str):
 
 @app.get("/api/tasks/<task_id>/items")
 def api_stage_items(task_id: str):
-    return jsonify(
-        {
-            "items": store.list_stage_items(
-                task_id,
-                request.args.get("stage", "rough"),
-                username=request.args.get("username", ""),
-                include_history=clean_bool(request.args.get("include_history", False)),
-                reserve_open_label_item=True,
-            )
-        }
+    limit_value = request.args.get("limit")
+    page = store.list_stage_items_page(
+        task_id,
+        request.args.get("stage", "rough"),
+        username=request.args.get("username", ""),
+        include_history=clean_bool(request.args.get("include_history", False)),
+        reserve_open_label_item=True,
+        offset=clean_non_negative_int(request.args.get("offset", 0)),
+        limit=None if limit_value in (None, "") else clean_positive_int(limit_value),
     )
+    return jsonify(page)
 
 
 @app.get("/api/tasks/<task_id>/visualization-results")
@@ -2209,17 +2589,36 @@ def api_visualization_results(task_id: str):
     limit = max(1, int(request.args.get("limit", 1) or 1))
     stage = request.args.get("stage", "rough")
     filters = json.loads(request.args.get("filters", "{}") or "{}")
+    include_filter_options = clean_bool(request.args.get("include_filter_options", True))
     total, results = store.get_visualization_results(task_id, stage, offset=page * limit, limit=limit, filters=filters)
-    return jsonify(
-        {
-            "stage": stage,
-            "results": results,
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "filter_options": store.get_visualization_filter_options(task_id, stage),
-        }
-    )
+    payload = {
+        "stage": stage,
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+    if include_filter_options:
+        payload["filter_options"] = store.get_visualization_filter_options(task_id, stage)
+    return jsonify(payload)
+
+
+@app.get("/api/tasks/<task_id>/results")
+def api_unified_results(task_id: str):
+    page = clean_non_negative_int(request.args.get("page"), 0)
+    limit = clean_positive_int(request.args.get("limit"), 1)
+    filters = json.loads(request.args.get("filters", "{}") or "{}")
+    include_filter_options = clean_bool(request.args.get("include_filter_options", True))
+    total, results = store.get_unified_results(task_id, offset=page * limit, limit=limit, filters=filters)
+    payload = {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+    if include_filter_options:
+        payload["filter_options"] = store.get_unified_filter_options(task_id)
+    return jsonify(payload)
 
 
 @app.post("/api/tasks/<task_id>/items/<int:item_index>/rough")
@@ -2235,6 +2634,11 @@ def api_save_fine(task_id: str, item_index: int):
 @app.post("/api/tasks/<task_id>/items/<int:item_index>/label")
 def api_save_label(task_id: str, item_index: int):
     return jsonify({"record": store.save_label(task_id, item_index, request.get_json(force=True) or {})})
+
+
+@app.post("/api/tasks/<task_id>/results/<int:item_index>/labels")
+def api_save_result_labels(task_id: str, item_index: int):
+    return jsonify({"record": store.save_result_labels(task_id, item_index, request.get_json(force=True) or {})})
 
 
 @app.post("/api/tasks/<task_id>/sample")

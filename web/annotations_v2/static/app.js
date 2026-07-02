@@ -8,17 +8,20 @@ const state = {
   stage: "rough",
   items: [],
   index: 0,
-  visualizationStage: "rough",
+  rateOffset: 0,
+  rateTotal: 0,
+  rateHistory: [],
   visualizationResults: [],
   visualizationPage: 0,
   visualizationTotal: 0,
-  visualizationFilters: { mos: [], has_defect: [], annotators: [], labels: {} },
-  visualizationFilterOptions: { mos: [], has_defect: [], annotators: [], label_options: [] },
+  visualizationFilters: { statuses: [], mos: [], has_defect: [], annotators: [], labels: {} },
+  visualizationFilterOptions: { statuses: [], mos: [], has_defect: [], annotators: [], label_options: [] },
   sampleBuckets: [],
   sampleCandidateCount: 0,
 };
 
 const TASK_DELETE_ADMIN_USERNAME = "孙本猿";
+const RATE_PAGE_SIZE = 1;
 const PRELOAD_FORWARD_PAGES = 3;
 const MAX_PRELOADED_IMAGES = 48;
 const preloadedImages = new Map();
@@ -241,10 +244,7 @@ function renderTasks() {
       </div>
       <div class="pathLine">${escapeHtml(task.jsonl_path)}</div>
       <div class="taskActions">
-        <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=rough`}">粗筛结果</a>
-        <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=fine`}">精筛结果</a>
-        <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=sample`}">采样结果</a>
-        <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}?stage=label`}">标签结果</a>
+        <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}`}">结果展示</a>
         <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
         <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
         <button class="ghost" data-action="cache-previews" data-id="${task.id}" type="button">缓存图片</button>
@@ -435,13 +435,19 @@ function taskById(taskId) {
   return state.tasks.find((task) => task.id === taskId) || null;
 }
 
-function stageItemsUrl(taskId, stage, includeHistory = false) {
+function stageItemsUrl(taskId, stage, includeHistory = false, options = {}) {
   const params = new URLSearchParams({
     stage,
     username: state.username,
   });
   if (includeHistory) {
     params.set("include_history", "1");
+  }
+  if (options.offset !== undefined) {
+    params.set("offset", String(options.offset));
+  }
+  if (options.limit !== undefined) {
+    params.set("limit", String(options.limit));
   }
   return `/api/tasks/${taskId}/items?${params.toString()}`;
 }
@@ -470,11 +476,24 @@ async function openStage(taskId, stage) {
   }
   state.stage = stage;
   state.index = 0;
+  state.rateOffset = 0;
+  state.rateTotal = 0;
+  state.rateHistory = [];
   $("samplePanel")?.classList.add("hidden");
-  const data = await api(stageItemsUrl(taskId, stage, true));
-  state.items = data.items || [];
-  state.index = firstUnannotatedItemIndex();
   $("workbench")?.classList.remove("hidden");
+  await loadRateItemPage(0);
+}
+
+async function loadRateItemPage(offset = 0) {
+  if (!state.activeTask) return;
+  const data = await api(stageItemsUrl(state.activeTask.id, state.stage, false, {
+    offset,
+    limit: RATE_PAGE_SIZE,
+  }));
+  state.items = data.items || [];
+  state.index = 0;
+  state.rateOffset = Number(data.offset || 0);
+  state.rateTotal = Number(data.total || 0);
   renderCurrentItem();
 }
 
@@ -482,7 +501,7 @@ function renderCurrentItem() {
   const task = state.activeTask;
   const stageName = stageTitle(state.stage);
   $("workTitle").textContent = task ? `${task.name} · ${stageName}` : stageName;
-  $("workProgress").textContent = state.items.length ? `${state.index + 1}/${state.items.length}` : "0/0";
+  $("workProgress").textContent = state.items.length ? `${Math.min(state.rateOffset + 1, state.rateTotal)}/${state.rateTotal}` : "0/0";
   $("emptyStage").classList.toggle("hidden", state.items.length > 0);
   $("stageBody").classList.toggle("hidden", state.items.length === 0);
   if (!state.items.length) {
@@ -773,10 +792,8 @@ async function reloadCurrentStageAfterSave(preferredIndex) {
   const stage = state.stage;
   await loadTasks();
   state.activeTask = taskById(taskId);
-  const data = await api(stageItemsUrl(taskId, stage, true));
-  state.items = data.items || [];
-  state.index = Math.max(0, Math.min(Math.max(0, state.items.length - 1), preferredIndex));
-  renderCurrentItem();
+  state.stage = stage;
+  await loadRateItemPage(state.rateOffset);
 }
 
 function advanceCurrentStageLocally(preferredIndex) {
@@ -792,6 +809,15 @@ function setRatePagingBusy(isBusy) {
 async function goToItem(nextIndex) {
   if (!state.items.length) return;
   if (ratePagingInFlight) return;
+  if (nextIndex < 0) {
+    const previousItem = state.rateHistory.pop();
+    if (!previousItem) return;
+    state.items = [previousItem];
+    state.index = 0;
+    state.rateOffset = Math.max(0, state.rateOffset - 1);
+    renderCurrentItem();
+    return;
+  }
   const boundedIndex = Math.max(0, Math.min(state.items.length - 1, nextIndex));
   const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;
   if (boundedIndex === state.index && !movingPastLastItem) return;
@@ -803,12 +829,8 @@ async function goToItem(nextIndex) {
   setRatePagingBusy(true);
   try {
     if (!(await saveCurrentStageBeforePageChange())) return;
-    const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;
-    if (state.stage === "label") {
-      advanceCurrentStageLocally(preferredIndex);
-    } else {
-      await reloadCurrentStageAfterSave(preferredIndex);
-    }
+    state.rateHistory.push(state.items[state.index]);
+    await loadRateItemPage(state.rateOffset);
     if (movingPastLastItem) {
       showToast("已保存");
     }
@@ -852,7 +874,7 @@ async function saveStage(event) {
     body: JSON.stringify(payload),
   });
   showToast("已保存");
-  await reloadCurrentStageAfterSave(state.index);
+  await loadRateItemPage(state.rateOffset);
 }
 
 function collectCurrentStagePayload() {
@@ -962,64 +984,38 @@ function renderSampleResult(result) {
   `;
 }
 
-function visualizationStageTitle(stage) {
-  return { rough: "粗筛结果", fine: "精筛结果", sample: "采样结果", label: "标签结果" }[stage] || "结果";
-}
-
-function normalizeVisualizationStage(stage) {
-  return ["rough", "fine", "sample", "label"].includes(stage) ? stage : "rough";
-}
-
 async function openVisualizationPage() {
-  const params = new URLSearchParams(window.location.search);
-  state.visualizationStage = normalizeVisualizationStage(params.get("stage") || "rough");
   state.visualizationPage = 0;
   state.activeTask = taskById(state.taskId) || { id: state.taskId, name: state.taskId };
-  renderVisualizationStageTabs();
   await reloadVisualizationResults();
   renderVisualizationPage();
 }
 
-async function reloadVisualizationResults() {
+async function reloadVisualizationResults(options = {}) {
   const params = new URLSearchParams({
-    stage: state.visualizationStage,
     page: String(state.visualizationPage),
     limit: "1",
   });
+  if (options.includeFilterOptions === false) {
+    params.set("include_filter_options", "0");
+  }
   if (hasActiveVisualizationFilters()) {
     params.set("filters", JSON.stringify(buildVisualizationFilterPayload()));
   }
-  const data = await api(`/api/tasks/${state.taskId}/visualization-results?${params.toString()}`);
+  const data = await api(`/api/tasks/${state.taskId}/results?${params.toString()}`);
   state.visualizationResults = data.results || [];
   state.visualizationTotal = Number(data.total || 0);
-  state.visualizationFilterOptions = data.filter_options || { mos: [], has_defect: [], annotators: [], label_options: [] };
+  state.visualizationFilterOptions = data.filter_options || state.visualizationFilterOptions;
   if (state.visualizationPage >= state.visualizationTotal) {
     state.visualizationPage = Math.max(0, state.visualizationTotal - 1);
     if (state.visualizationTotal > 0) {
-      await reloadVisualizationResults();
+      await reloadVisualizationResults(options);
     }
   }
 }
 
-function renderVisualizationStageTabs() {
-  const tabs = $("visualizationStageTabs");
-  if (!tabs) return;
-  const stages = [
-    ["rough", "粗筛"],
-    ["fine", "精筛"],
-    ["sample", "采样"],
-    ["label", "标签"],
-  ];
-  tabs.innerHTML = stages.map(([stage, label]) => `
-    <button class="stageTab ${state.visualizationStage === stage ? "active" : ""}" data-visualization-stage="${stage}" type="button">
-      ${label}
-    </button>
-  `).join("");
-}
-
 function renderVisualizationPage() {
-  const title = visualizationStageTitle(state.visualizationStage);
-  $("visualizationTitle").textContent = `${state.activeTask?.name || state.taskId} · ${title}`;
+  $("visualizationTitle").textContent = `${state.activeTask?.name || state.taskId} · 结果展示`;
   $("emptyVisualization").classList.toggle("hidden", state.visualizationTotal > 0);
   $("visualizationBody").classList.toggle("hidden", state.visualizationTotal === 0);
   if (!state.visualizationTotal || !state.visualizationResults.length) {
@@ -1051,69 +1047,36 @@ function renderVisualizationPage() {
   $("visualizationDstImage").onerror = () => $("visualizationDstImage").removeAttribute("src");
   renderVisualizationImagePrompt(item);
   preloadVisualizationNeighbors().catch((error) => console.warn(error));
-
-  if (state.visualizationStage === "rough" || state.visualizationStage === "fine") {
-    renderScreeningVisualization(item);
-    return;
-  }
-  if (state.visualizationStage === "sample") {
-    renderSampleVisualization(item);
-    return;
-  }
-  renderLabelVisualization(item);
+  renderUnifiedResultPanel(item);
 }
 
-function renderScreeningVisualization(item) {
-  const panel = $("visualizationResultPanel");
-  const stageName = state.visualizationStage === "rough" ? "粗筛" : "精筛";
-  panel.innerHTML = `
-    <h2>${stageName}</h2>
+function renderUnifiedResultPanel(item) {
+  $("visualizationResultPanel").innerHTML = `
+    <h2>结果</h2>
     <div class="badgeRow">
-      ${resultBadge(item.stage_passed ? "通过" : "未通过", item.stage_passed ? "pass" : "fail")}
-      ${item.stage_result?.mos ? resultBadge(`MOS ${item.stage_result.mos}`) : resultBadge("未完成")}
-      ${item.stage_result?.annotator_count ? resultBadge(`${item.stage_result.annotator_count} 人`) : ""}
+      ${statusBadge("粗筛", item.status?.rough_passed, item.status?.rough_completed)}
+      ${statusBadge("精筛", item.status?.fine_passed, item.status?.fine_completed)}
+      ${resultBadge(item.sampled ? "已采样" : "未采样", item.sampled ? "pass" : "")}
+      ${resultBadge(item.label ? "已编辑标签" : "未编辑标签", item.label ? "pass" : "")}
     </div>
-    ${renderScreeningRecord("聚合结果", item.stage_result)}
+    ${renderScreeningRecord("粗筛聚合", item.rough)}
+    ${renderScreeningRecord("精筛聚合", item.fine)}
     <section class="resultBlock">
-      <h3>标注记录</h3>
-      <div class="resultList">
-        ${(item.stage_annotations || []).map((record, index) => renderScreeningRecord(`第 ${index + 1} 人`, record)).join("") || '<div class="metaText">暂无记录</div>'}
+      <h3>采样</h3>
+      <div class="tagRows">
+        ${resultRow("状态", item.sampled ? "已采样" : "未采样")}
+        ${resultRow("采样桶", item.sample_bucket || "未分组")}
       </div>
     </section>
-    ${state.visualizationStage === "fine" ? renderScreeningRecord("粗筛摘要", item.rough) : ""}
+    ${renderEditableLabels(item)}
+    ${renderLabelRevisionHistory(item)}
   `;
 }
 
-function renderSampleVisualization(item) {
-  $("visualizationResultPanel").innerHTML = `
-    <h2>采样</h2>
-    <div class="badgeRow">
-      ${resultBadge(item.sampled ? "已采样" : "未采样", item.sampled ? "pass" : "fail")}
-    </div>
-    <section class="resultBlock">
-      <h3>采样桶</h3>
-      <p>${escapeHtml(item.sample_bucket || "未分组")}</p>
-    </section>
-    ${renderScreeningRecord("粗筛摘要", item.rough)}
-    ${renderScreeningRecord("精筛摘要", item.fine)}
-  `;
-}
-
-function renderLabelVisualization(item) {
-  $("visualizationResultPanel").innerHTML = `
-    <h2>标签纠错</h2>
-    <div class="badgeRow">
-      ${resultBadge(item.corrected_labels ? "已纠错" : "未纠错", item.corrected_labels ? "pass" : "fail")}
-      ${item.label_username ? resultBadge(`标注者 ${item.label_username}`) : ""}
-      ${item.label_updated_at ? resultBadge(formatTimestamp(item.label_updated_at)) : ""}
-    </div>
-    <section class="resultBlock">
-      <h3>采样桶</h3>
-      <p>${escapeHtml(item.sample_bucket || "未分组")}</p>
-    </section>
-    ${renderLabelRows("原始标签", item.original_labels)}
-    ${renderLabelRows("纠错标签", item.corrected_labels)}
-  `;
+function statusBadge(label, passed, completed) {
+  if (passed) return resultBadge(`${label}通过`, "pass");
+  if (completed) return resultBadge(`${label}未通过`, "fail");
+  return resultBadge(`${label}未完成`);
 }
 
 function renderScreeningRecord(title, record) {
@@ -1153,6 +1116,150 @@ function renderLabelRows(title, labels) {
   `;
 }
 
+function resultLabelPaths(item) {
+  const selected = state.activeTask?.selected_label_paths || [];
+  if (selected.length) return selected;
+  return flattenLabelRows(item.effective_labels || item.original_labels || {}).map((row) => row.parts);
+}
+
+function renderEditableLabels(item) {
+  const labels = item.effective_labels || item.original_labels || {};
+  const paths = resultLabelPaths(item);
+  return `
+    <section class="resultBlock">
+      <h3>标签</h3>
+      <div class="tagRows editableLabelRows">
+        ${paths.map((path) => renderEditableLabelRow(path, getNested(labels, path), item)).join("") || '<div class="metaText">暂无标签</div>'}
+      </div>
+    </section>
+  `;
+}
+
+function renderEditableLabelRow(path, value, item) {
+  const labelMeta = item.label || {};
+  const meta = [
+    labelMeta.username ? `编辑人 ${labelMeta.username}` : "",
+    labelMeta.updated_at ? formatTimestamp(labelMeta.updated_at) : "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <div class="tagRow resultEditableLabelRow" data-result-label-path="${escapeHtml(JSON.stringify(path))}">
+      <div class="tagKey">${escapeHtml(path.join("/"))}</div>
+      <button class="tagValue resultLabelValue" type="button">${escapeHtml(value ?? "未选择")}</button>
+      <div class="tagMeta">${escapeHtml(meta)}</div>
+    </div>
+  `;
+}
+
+function currentVisualizationItem() {
+  return state.visualizationResults[0] || null;
+}
+
+function findResultLabelDimension(path) {
+  const [groupName, ...dimensionParts] = path;
+  const dimensionName = dimensionParts.join("/");
+  const group = (state.activeTask?.label_option_groups || []).find((entry) => entry.name === groupName);
+  return (group?.dimensions || []).find((entry) => entry.name === dimensionName) || null;
+}
+
+function optionsWithCurrentValue(options, currentValue) {
+  const values = [...(options || [])];
+  if (currentValue !== undefined && currentValue !== null && currentValue !== "" && !values.some((value) => String(value) === String(currentValue))) {
+    values.unshift(currentValue);
+  }
+  return values;
+}
+
+function renderResultSelectEditor(options, currentValue) {
+  const select = document.createElement("select");
+  select.className = "qcInlineEditor";
+  if (currentValue === undefined || currentValue === null || currentValue === "") {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "未选择";
+    empty.selected = true;
+    select.appendChild(empty);
+  }
+  for (const optionValue of optionsWithCurrentValue(options, currentValue)) {
+    const option = document.createElement("option");
+    option.value = String(optionValue);
+    option.textContent = String(optionValue);
+    option.selected = String(optionValue) === String(currentValue);
+    select.appendChild(option);
+  }
+  return select;
+}
+
+function beginVisualizationLabelEdit(row) {
+  const item = currentVisualizationItem();
+  if (!item) return;
+  const path = JSON.parse(row.dataset.resultLabelPath || "[]");
+  const button = row.querySelector(".resultLabelValue");
+  if (!button) return;
+  const currentValue = getNested(item.effective_labels || {}, path);
+  const dimension = findResultLabelDimension(path);
+  const editor = renderResultSelectEditor(dimension?.options || [], currentValue);
+  button.replaceWith(editor);
+  editor.focus();
+  let saved = false;
+  const save = () => {
+    if (saved) return;
+    saved = true;
+    const nextLabels = mergeLabelObjects(item.effective_labels || item.original_labels || {}, {});
+    setNested(nextLabels, path, editor.value);
+    saveVisualizationLabels(item, nextLabels).catch((error) => showToast(error.message));
+  };
+  editor.addEventListener("change", save);
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") save();
+    if (event.key === "Escape") renderVisualizationPage();
+  });
+  editor.addEventListener("blur", save, { once: true });
+}
+
+async function saveVisualizationLabels(item, labels) {
+  if (!state.username) {
+    throw new Error("请先登录");
+  }
+  const data = await api(`/api/tasks/${state.taskId}/results/${item.item_index}/labels`, {
+    method: "POST",
+    body: JSON.stringify({ username: state.username, labels }),
+  });
+  item.label = {
+    username: data.record.username,
+    labels: data.record.labels,
+    updated_at: data.record.updated_at,
+  };
+  item.effective_labels = data.record.labels;
+  item.label_revisions = data.record.label_revisions || [];
+  renderVisualizationPage();
+  showToast("标签已保存");
+}
+
+function renderLabelRevisionHistory(item) {
+  const revisions = item.label_revisions || [];
+  return `
+    <details class="resultBlock revisionHistory">
+      <summary>编辑历史 ${revisions.length}</summary>
+      <div class="revisionList">
+        ${revisions.map(renderLabelRevision).join("") || '<div class="metaText">暂无编辑历史</div>'}
+      </div>
+    </details>
+  `;
+}
+
+function renderLabelRevision(revision) {
+  return `
+    <article class="revisionItem">
+      <div class="revisionHead">
+        <strong>${escapeHtml(revision.username || "未知用户")}</strong>
+        <span>${escapeHtml(formatTimestamp(revision.updated_at))}</span>
+      </div>
+      ${renderLabelRows("修改前", revision.before)}
+      ${renderLabelRows("修改后", revision.after)}
+    </article>
+  `;
+}
+
 function flattenLabelRows(value, prefix = []) {
   if (!value || typeof value !== "object") return [];
   const rows = [];
@@ -1161,7 +1268,7 @@ function flattenLabelRows(value, prefix = []) {
     if (child && typeof child === "object" && !Array.isArray(child)) {
       rows.push(...flattenLabelRows(child, path));
     } else {
-      rows.push({ path: path.join("/"), value: Array.isArray(child) ? child.join("，") : child });
+      rows.push({ path: path.join("/"), parts: path, value: Array.isArray(child) ? child.join("，") : child });
     }
   }
   return rows;
@@ -1203,14 +1310,14 @@ async function preloadVisualizationNeighbors() {
 
 async function preloadVisualizationPageImages(page) {
   const params = new URLSearchParams({
-    stage: state.visualizationStage,
     page: String(page),
     limit: "1",
+    include_filter_options: "0",
   });
   if (hasActiveVisualizationFilters()) {
     params.set("filters", JSON.stringify(buildVisualizationFilterPayload()));
   }
-  const data = await api(`/api/tasks/${state.taskId}/visualization-results?${params.toString()}`);
+  const data = await api(`/api/tasks/${state.taskId}/results?${params.toString()}`);
   const item = (data.results || [])[0];
   if (!item) return;
   preloadImage(item.image_urls?.src || `/api/tasks/${state.taskId}/images/${item.item_index}/src`);
@@ -1259,7 +1366,7 @@ function setImagePath(targetId, value) {
 }
 
 function emptyVisualizationFilters() {
-  return { mos: [], has_defect: [], annotators: [], labels: {} };
+  return { statuses: [], mos: [], has_defect: [], annotators: [], labels: {} };
 }
 
 function visualizationFilterKey(path) {
@@ -1275,6 +1382,7 @@ function normalizeVisualizationLabelFilter(entry) {
 function hasActiveVisualizationFilters() {
   const payload = buildVisualizationFilterPayload();
   return Boolean(
+    payload.statuses.length ||
     payload.mos.length ||
     payload.has_defect.length ||
     payload.annotators.length ||
@@ -1284,6 +1392,7 @@ function hasActiveVisualizationFilters() {
 
 function buildVisualizationFilterPayload() {
   return {
+    statuses: state.visualizationFilters.statuses || [],
     mos: state.visualizationFilters.mos || [],
     has_defect: state.visualizationFilters.has_defect || [],
     annotators: state.visualizationFilters.annotators || [],
@@ -1302,6 +1411,7 @@ function renderVisualizationFilterPanel() {
   if (!body) return;
   const options = state.visualizationFilterOptions || {};
   body.innerHTML = "";
+  body.appendChild(renderVisualizationFilterGroup("状态", options.statuses || [], "statuses", state.visualizationFilters.statuses));
   body.appendChild(renderVisualizationFilterGroup("MOS 分", visualizationFilterOptionsOrDefault(options.mos, [1, 2, 3, 4, 5]), "mos", state.visualizationFilters.mos));
   body.appendChild(renderVisualizationFilterGroup(
     "是否有质量问题",
@@ -1371,6 +1481,10 @@ function collectVisualizationFilters() {
   const filters = emptyVisualizationFilters();
   $("visualizationFilterBody").querySelectorAll('input[type="checkbox"]:checked').forEach((input) => {
     const value = input.value;
+    if (input.dataset.visualizationFilterType === "statuses") {
+      filters.statuses.push(value);
+      return;
+    }
     if (input.dataset.visualizationFilterType === "mos") {
       filters.mos.push(Number(value));
       return;
@@ -1430,18 +1544,6 @@ async function goToVisualizationPage(nextPage) {
   renderVisualizationPage();
 }
 
-async function switchVisualizationStage(stage) {
-  state.visualizationStage = normalizeVisualizationStage(stage);
-  state.visualizationPage = 0;
-  state.visualizationFilters = emptyVisualizationFilters();
-  const params = new URLSearchParams(window.location.search);
-  params.set("stage", state.visualizationStage);
-  window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
-  renderVisualizationStageTabs();
-  await reloadVisualizationResults();
-  renderVisualizationPage();
-}
-
 function bindEvents() {
   $("loginForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1494,10 +1596,10 @@ function bindEvents() {
     const target = Number($("visualizationJumpInput").value || 1) - 1;
     goToVisualizationPage(target).catch((error) => showToast(error.message));
   });
-  $("visualizationStageTabs")?.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-visualization-stage]");
-    if (!target) return;
-    switchVisualizationStage(target.dataset.visualizationStage).catch((error) => showToast(error.message));
+  $("visualizationResultPanel")?.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-result-label-path]");
+    if (!row || event.target.closest(".qcInlineEditor")) return;
+    beginVisualizationLabelEdit(row);
   });
   $("openVisualizationFilterBtn")?.addEventListener("click", () => openVisualizationFilterPanel());
   $("visualizationFilterOverlay")?.addEventListener("click", () => closeVisualizationFilterPanel());

@@ -10,38 +10,143 @@ from pipeline.utils.file_ops import image_to_base64
 
 
 USER_GUIDE_PROMPT_COMPOSE = """
-你是一位深耕美食摄影与AI视觉生成的跨界导师。你的任务是给用户简短的教学，让用户能够指导怎么从当前的相机画面（图一）能够拍出目标的效果图（图二）。
+# Role
+你是一位深耕商业美食摄影与AI视觉生成的跨界导师。你的任务是通过分析用户的“当前相机画面（图一）”和“目标效果图（图二）”，输出精准、极简、生动的交互式摄影引导，帮助用户通过物理位移和构图调整，拍出具有强烈视觉表现力的美食照片，每张图片随机生成一种的提示方案。
 
-规则：
-1. 分为3个描述：
-    a. 场景描述，按照分为环境 + 菜系的固定格式给出，菜系分为：中餐、东南亚菜、韩餐、烧烤、西餐、下午产、日料、水果、饮品。（从中选择最合适的一个作为分类）。场景描述示例：暖光中餐、圆桌中餐、包厢中餐、暗光西餐、烛光西餐、露台西餐、窗边下午茶、阳光下午茶、露台下午茶、明档烘培蛋糕、板前日料、暗调日料、吧台日料。共4-7字，不要包含任何的标点符号，如果出现中餐与日料难以分辨的情形，以中餐为主)；
-    b. 整体引导，语气亲切易懂，分为三句描述：
-        i) 第一句为摆盘引导，使用清晰且情切的描述，告诉用户该怎么进行摆盘操作，话语需要基友信息量
-        ii) 第二句为拍摄方法引导，指导用户进行机位调整，如果出现虚化，需要提示用户怎么才能拍出虚化，例如，使用长焦拍出虚化
-        iii) 第三句为拍摄效果（按照动词 + 食物 + XX感的形式给出，例如，拍出饮品通透感、展现火锅的烟气），总共20-25字，不超过上限；
-    c. 除了整体引导外，还需要输出一个整体引导的重写，让更加格式多样化（改成2-4句，不一定完全遵从格式，但需要包含三个信息）和人性化(25-30字)
-    d. 摆盘描述，单独对如何进行摆盘进行引导，只包含与摆盘相关的内容(25-30字)。严格控制字数不要超过上限（包括中文、标点）。
-2. 融合对场景的理解、分析，以及对应的拍摄建议。
-3. 使用中文输出。
+# 多维度语料标签库（仅为示例，可在此基础上自行发挥）
+在生成引导文案时，请参考以下多维度标签的方向灵活发散，不局限于示例词汇。
+【关于“XX感”】：可以适度使用“XX感”（如氛围感、食欲感）来表达整体意境，但请尽量结合具体的物理表现和光源特征，避免空泛和通篇重复。
 
-什么是好的引导语：
-1. 低认知负荷、简单的、直接的、行动导向的引导。
-2. 引导部分动作明确，使用具体的名词和动词，不要使用“主体”等抽象词语。
-3. 指令简介，分步指导。
+1. [摆盘动作标签]
+   - 微调级示例：稍微挪动、转个小角度、往中心推、拨开一点。
+   - 动作级示例：移出画面、重新堆叠、清空边缘、留出视觉呼吸空间。
 
-输出格式：
-json```
+2. [机位参数标签]
+   - 专业级示例（摄影向）：向后退开启长焦压缩、长焦虚化背景、平视角度、垂直俯拍、90度顶拍。
+   - 通俗级示例（大白话）：向后退、手机放低、举到正上方、往后退、保持手机端平、向左/右移动。
+   - 语气种类：建议型 - 可以、尝试、...；陈述型 - 将、把、（或直接描述，例如后退合适距离使用长焦虚化背景）
+
+3. [视觉表现标签]
+   - 材质与触觉示例：外酥里嫩、水润欲滴、颤动的溏心、汁水丰盈、肉理分明、热气腾腾。
+   - 光源与氛围示例：捕捉边缘轮廓光、凸显色彩碰撞、强化暗调对比、展现深夜食堂的烟火气、营造慵懒的早午餐氛围。
+
+# Rules
+【标点与语气禁令】：通篇引导语严禁使用疑问号（？）和感叹号（！），以及各种字符（如>, <, +, -等）。必须使用平缓、专业的陈述语气，句子间使用逗号（，）隔开，以句号（。）作为整句的结尾。
+
+1. 场景描述 (5-8字)：
+   - 格式严格为：环境 + 菜系。
+   - 菜系仅限：中餐、东南亚菜、韩餐、烧烤、西餐、下午茶、日料、水果、饮品。（难以分辨时优先选中餐，如果主体为烧烤则为烧烤）。
+   - 要求：绝对不包含任何标点符号。环境挑选较为显著的环境因素，如果是非典型环境，例如木桌、圆桌等，则不要使用，例如不要描述“木桌水果”。
+   - 示例：暖光中餐、包厢中餐、暗光西餐、烛光西餐、露台西餐、窗边下午茶、阳光下午茶、露台下午茶、明档烘焙蛋糕、板前日料、吧台日料。
+
+2. 摆盘描述 (20-30字)：
+   - 目标：仅针对画面中的物件位置进行精细指导。
+   - 要求：指令极简、分步指导，绝不涉及相机操作。
+
+3. 整体引导 (27-35字)：
+   - 语气：标准、直接的陈述指导口吻。
+   - 结构（使用逗号连接，句号结尾）：
+     i. 摆盘动作：参考[摆盘动作标签]方向自行发挥。进行具体的描述，不要使用“清空杂物”等信息量较少的话语，具体指定物体，如“蛋糕”、“汉堡”等。可以参考已经生成的详细摆盘描述。（约13字数）
+     ii. 机位与参数：参考[机位参数标签]方向自行发挥，注意，如果画面出现虚化，需要进行引导，可以使用柔焦、背景模糊、虚化等词进行表述。语气从以下示例中随机参考选择。（约10字）
+       - 示例：尝试放低视角并虚化背景，将镜头下移并开启长焦，可以平视靠近并利用虚化弱化后景，尝试采用九十度顶拍，拉开距离使用长焦模糊背景，保持手机端平垂直俯拍
+       - 注意不要提示“人像模式”
+     iii. 视觉效果：参考[视觉表现标签]方向自行发挥，将物理动作与最终的画面表现关联。（约10字）
+
+4. 整体引导重写 (27-35字) —— 【关键：多样性生成】：
+   - 每次生成时，随机对已经生成的引导进行随机改写，例如将“手机向后移动并开启虚化”改写为“尝试后退并使用长焦排除虚化效果”
+   - 要求：必须包含摆盘、机位、效果三个核心信息，严格使用陈述句式，标点符合语境。
+
+
+
+# Output Format
+每张图片随机生成一种的提示方案，请严格按照以下 JSON 格式输出，确保字数符合限制。在“调用标签”字段中，如实记录你在生成【整体引导重写】时参考或发散的具体标签类型：
+
+```jsonl
 {
-    "场景描述": xxxx(5-8字，不输出结尾标点符号)，
-    "整体引导": xxxx(20-25字，使用逗号连接，句号结尾),
-    "摆盘描述": xxxx(25-30字，使用逗号连接，句号结尾),
-    "整体引导重写"：xxxx(20-25字，使用逗号连接，句号结尾),
-}  
+    "场景描述": "xxxx",
+    "摆盘描述": "xxxx，xxxx。",
+    "整体引导": "xxxx，xxxx，xxxx。",
+    
+    "调用标签": ["微调级", "通俗级", "光源与氛围"],
+    "整体引导重写": "xxxx，xxxx，xxxx。"
+}
 ```
 """
 
-USER_GUIDE_FIELDS = ("场景描述", "整体引导", "摆盘描述", "整体引导重写")
+
+
+USER_GUIDE_PROMPT_COMPOSE_V2 = """
+# Role
+你是一位深耕商业美食摄影与AI视觉生成的跨界导师。你的任务是通过分析用户的“当前相机画面（图一）”和“目标效果图（图二）”，输出精准、极简、生动的交互式摄影引导，帮助用户通过物理位移和构图调整，拍出具有强烈视觉表现力的美食照片，每张图片随机生成两种不同的提示方案。
+
+# 多维度语料标签库（仅为示例，可在此基础上自行发挥）
+在生成引导文案时，请参考以下多维度标签的方向灵活发散，不局限于示例词汇。
+【关于“XX感”】：可以适度使用“XX感”（如氛围感、食欲感）来表达整体意境，但请尽量结合具体的物理表现和光源特征，避免空泛和通篇重复。
+
+1. [摆盘动作标签]
+   - 微调级示例：稍微挪动、转个小角度、往中心推、拨开一点。
+   - 动作级示例：移出画面、重新堆叠、清空边缘、留出视觉呼吸空间。
+
+2. [机位参数标签]
+   - 通俗级示例（大白话）：凑近一点、手机放低、举到正上方、往后退、保持手机端平。
+   - 专业级示例（摄影向）：开启长焦压缩、大光圈虚化背景、平视角度、垂直俯拍、90度顶拍。
+
+3. [视觉表现标签]
+   - 材质与触觉示例：外酥里嫩、水润欲滴、颤动的溏心、汁水丰盈、肉理分明、热气腾腾。
+   - 光源与氛围示例：捕捉边缘轮廓光、凸显色彩碰撞、强化暗调对比、展现深夜食堂的烟火气、营造慵懒的早午餐氛围。
+
+# Rules
+【标点与语气禁令】：通篇引导语严禁使用疑问号（？）和感叹号（！），以及各种字符（如>, <, +, -等）。必须使用平缓、专业的陈述语气，句子间使用逗号（，）隔开，以句号（。）作为整句的结尾。
+
+1. 场景描述 (5-8字)：
+   - 格式严格为：环境 + 菜系。
+   - 菜系仅限：中餐、东南亚菜、韩餐、烧烤、西餐、下午茶、日料、水果、饮品。（难以分辨时优先选中餐）。
+   - 要求：绝对不包含任何标点符号。
+
+2. 整体引导 (20-30字)：
+   - 语气：标准、直接的陈述指导口吻。
+   - 结构（使用逗号连接，句号结尾）：
+     i. 摆盘动作：参考[摆盘动作标签]方向自行发挥。
+     ii. 机位与参数：参考[机位参数标签]方向自行发挥，注意，如果画面出现虚化，需要进行引导，可以使用柔焦、背景模糊、虚化等词进行表述。
+     iii. 视觉效果：参考[视觉表现标签]方向自行发挥，将物理动作与最终的画面表现关联。
+
+3. 整体引导重写 (25-35字) —— 【关键：多样性生成】：
+   - 每次生成时，必须从以下 2 种语气中随机选择一种来进行重写（字数严格控制在25-35字之间）：
+     - [结果前置型]：先用[视觉表现标签]描绘画面目标，再给操作指令。示例：“如果想拍出水润欲滴的质感，可以换长焦压低机位，顺便把旁边的水杯拨开。”
+     - [细节聚焦型]：直接聚焦食物最诱人的局部特征（如高光、纹理），配合紧凑的动作指令。示例：“将视线锁定在颤动的溏心上，清空边缘并换大光圈凑近拍，直接放大诱人质感。”
+   - 要求：必须包含摆盘、机位、效果三个核心信息，严格使用陈述句式，标点符合语境。
+
+4. 摆盘描述 (20-30字)：
+   - 目标：仅针对画面中的物件位置进行精细指导。
+   - 要求：指令极简、分步指导，绝不涉及相机操作。
+
+# Output Format
+每张图片随机生成两种不同的提示方案，请严格按照以下 JSON 格式输出，确保字数符合限制。在“调用标签”字段中，如实记录你在生成【整体引导重写】时参考或发散的具体标签类型：
+
+```jsonl
+{
+    "场景描述": "xxxx",
+    "整体引导": "xxxx，xxxx，xxxx。",
+    "摆盘描述": "xxxx，xxxx。",
+    "选用语气": "结果前置型",
+    "调用标签": ["微调级", "通俗级", "光源与氛围"],
+    "整体引导重写": "xxxx，xxxx，xxxx。"
+}
+{
+    "场景描述": "xxxx",
+    "整体引导": "xxxx，xxxx，xxxx。",
+    "摆盘描述": "xxxx，xxxx。",
+    "选用语气": "细节聚焦型",
+    "调用标签": ["微调级", "通俗级", "光源与氛围"],
+    "整体引导重写": "xxxx，xxxx，xxxx。"
+}
+```
+"""
+
+USER_GUIDE_TEXT_FIELDS = ("场景描述", "整体引导", "摆盘描述", "整体引导重写")
+USER_GUIDE_FIELDS = (*USER_GUIDE_TEXT_FIELDS[:3], "调用标签", "整体引导重写")
 USER_GUIDE_FIELD_ALIASES = {"整体引导": ("整体描述",)}
+USER_GUIDE_SCHEME_COUNT = 1
 
 
 def _strip_markdown_fence(text: str) -> str:
@@ -57,18 +162,47 @@ def _strip_markdown_fence(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-def parse_user_guide_json(text: str) -> Dict[str, Any]:
+def _parse_json_values(text: str) -> List[Any]:
+    values: List[Any] = []
+    decoder = json.JSONDecoder()
+    index = 0
+    length = len(text)
+
+    while index < length:
+        while index < length and text[index].isspace():
+            index += 1
+        if index >= length:
+            break
+        value, index = decoder.raw_decode(text, index)
+        values.append(value)
+
+    return values
+
+
+def _load_user_guide_values(text: str) -> List[Any]:
     cleaned = _strip_markdown_fence(text)
     try:
         parsed = json.loads(cleaned)
     except JSONDecodeError as exc:
-        raise ValueError(f"User guide API returned invalid JSON: {exc}") from exc
+        try:
+            values = _parse_json_values(cleaned)
+        except JSONDecodeError:
+            raise ValueError(f"User guide API returned invalid JSON: {exc}") from exc
+        if not values:
+            raise ValueError("User guide API returned empty JSON content.")
+        return values
 
+    if isinstance(parsed, list):
+        return parsed
+    return [parsed]
+
+
+def _normalize_user_guide_item(parsed: Any) -> Dict[str, Any]:
     if not isinstance(parsed, dict):
-        raise ValueError("User guide API returned JSON, but the top-level value is not an object.")
+        raise ValueError("Each user guide entry must be a JSON object.")
 
     guide: Dict[str, Any] = {}
-    for field in USER_GUIDE_FIELDS:
+    for field in USER_GUIDE_TEXT_FIELDS:
         value = parsed.get(field)
         if value is None:
             for alias in USER_GUIDE_FIELD_ALIASES.get(field, ()):
@@ -79,13 +213,43 @@ def parse_user_guide_json(text: str) -> Dict[str, Any]:
             raise ValueError(f"User guide API response must contain a non-empty '{field}' string.")
         guide[field] = value.strip()
 
+    labels = parsed.get("调用标签")
+    if not isinstance(labels, list) or not labels:
+        raise ValueError("User guide API response must contain a non-empty '调用标签' list.")
+    clean_labels = []
+    for label in labels:
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError("User guide API response '调用标签' must contain only non-empty strings.")
+        clean_labels.append(label.strip())
+    guide["调用标签"] = clean_labels
+
     return guide
 
 
-def has_compose_user_guide(value: Any) -> bool:
+def parse_user_guide_json(text: str) -> List[Dict[str, Any]]:
+    values = _load_user_guide_values(text)
+    if len(values) != USER_GUIDE_SCHEME_COUNT:
+        raise ValueError(
+            f"User guide API response must contain exactly {USER_GUIDE_SCHEME_COUNT} guide entries."
+        )
+    guides = [_normalize_user_guide_item(value) for value in values]
+    return guides
+
+
+def _has_user_guide_item(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
-    return all(isinstance(value.get(field), str) and value[field].strip() for field in USER_GUIDE_FIELDS)
+    for field in USER_GUIDE_TEXT_FIELDS:
+        if not isinstance(value.get(field), str) or not value[field].strip():
+            return False
+    labels = value.get("调用标签")
+    return isinstance(labels, list) and all(isinstance(label, str) and label.strip() for label in labels)
+
+
+def has_compose_user_guide(value: Any) -> bool:
+    if isinstance(value, list):
+        return len(value) == USER_GUIDE_SCHEME_COUNT and all(_has_user_guide_item(item) for item in value)
+    return False
 
 
 def build_user_guide_messages(img_a_b64: str, img_b_b64: str) -> List[Dict[str, Any]]:
@@ -145,7 +309,9 @@ class UserGuideGeneratorModule(PipelineModule):
             return False
 
         result.description = dict(result.description or {})
-        result.description["user_guide"] = {field: user_guide[field].strip() for field in USER_GUIDE_FIELDS}
+        result.description["user_guide"] = parse_user_guide_json(
+            json.dumps(user_guide, ensure_ascii=False)
+        )
         return True
 
     def _generate_user_guide(
@@ -154,7 +320,7 @@ class UserGuideGeneratorModule(PipelineModule):
         model: str,
         original_image_path: str,
         generated_image_path: str,
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         orig_b64 = image_to_base64(original_image_path)
         gen_b64 = image_to_base64(generated_image_path)
         messages = build_user_guide_messages(orig_b64, gen_b64)

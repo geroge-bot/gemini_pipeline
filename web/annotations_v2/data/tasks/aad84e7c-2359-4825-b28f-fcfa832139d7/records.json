@@ -71,7 +71,16 @@
       "required_annotator_count": 1
     },
     "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶"
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label": {
+      "username": "孙本元",
+      "labels": {
+        "输入图": {
+          "菜品种类": "下午茶"
+        }
+      },
+      "updated_at": 1781091318.752666
+    }
   },
   "0": {
     "rough": {
@@ -115,7 +124,7 @@
           "菜品种类": "下午茶"
         }
       },
-      "updated_at": 1780986998.5100238
+      "updated_at": 1781091316.2511392
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -162,7 +171,7 @@
           "菜品种类": "日式料理"
         }
       },
-      "updated_at": 1780987000.250907
+      "updated_at": 1781091316.6181781
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -209,7 +218,7 @@
           "菜品种类": "下午茶"
         }
       },
-      "updated_at": 1780987001.335741
+      "updated_at": 1781091316.929734
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -256,7 +265,7 @@
           "菜品种类": "下午茶"
         }
       },
-      "updated_at": 1780987001.7969122
+      "updated_at": 1781091317.211571
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -447,7 +456,7 @@
           "菜品种类": "下午茶"
         }
       },
-      "updated_at": 1780987002.180532
+      "updated_at": 1781091317.5596328
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -566,7 +575,7 @@
           "菜品种类": "西餐"
         }
       },
-      "updated_at": 1780987002.5662389
+      "updated_at": 1781091317.8919759
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=西餐"
@@ -613,7 +622,7 @@
           "菜品种类": "下午茶"
         }
       },
-      "updated_at": 1780987002.901261
+      "updated_at": 1781091318.149653
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=下午茶"
@@ -1103,9 +1112,14 @@
     },
     "sampled": true,
     "sample_bucket": "输入图/菜品种类=西餐",
-    "label_claim": {
+    "label": {
       "username": "孙本元",
-      "claimed_at": 1781073060.6379251
+      "labels": {
+        "输入图": {
+          "菜品种类": "西餐"
+        }
+      },
+      "updated_at": 1781091315.478057
     }
   },
   "25": {
@@ -1144,7 +1158,16 @@
       "required_annotator_count": 1
     },
     "sampled": true,
-    "sample_bucket": "输入图/菜品种类=西餐"
+    "sample_bucket": "输入图/菜品种类=西餐",
+    "label": {
+      "username": "孙本元",
+      "labels": {
+        "输入图": {
+          "菜品种类": "西餐"
+        }
+      },
+      "updated_at": 1781091318.442452
+    }
   },
   "27": {
     "rough": {
@@ -1182,7 +1205,11 @@
       "required_annotator_count": 1
     },
     "sampled": true,
-    "sample_bucket": "输入图/菜品种类=下午茶"
+    "sample_bucket": "输入图/菜品种类=下午茶",
+    "label_claim": {
+      "username": "perf",
+      "claimed_at": 1782274183.148152
+    }
   },
   "28": {
     "rough": {
@@ -3668,6 +3695,30 @@
       "updated_at": 1781008004.3555021,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091336.419483
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091336.419483,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "3835": {
@@ -3692,6 +3743,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1781008005.764639,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091337.1840441
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091337.1840441,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -3746,6 +3821,30 @@
       "updated_at": 1781008008.494293,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091338.01046
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091338.01046,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "3826": {
@@ -3770,6 +3869,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1781008067.7721221,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091335.206157
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091335.206157,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -3798,6 +3921,30 @@
       "updated_at": 1781008069.0038688,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091335.850537
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091335.850537,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "3834": {
@@ -3822,6 +3969,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1781008069.842838,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091336.8613272
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091336.8613272,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -3876,6 +4047,30 @@
       "updated_at": 1781008071.91782,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091337.735026
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091337.735026,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "3840": {
@@ -3928,6 +4123,30 @@
       "updated_at": 1781008087.416951,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091338.517756
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091338.517756,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "3842": {
@@ -3952,6 +4171,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1781008088.9576352,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091338.993279
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091338.993279,
       "annotator_count": 1,
       "required_annotator_count": 1
     }
@@ -4084,6 +4327,30 @@
       "updated_at": 1781011010.808191,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091337.4211671
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091337.4211671,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "2834": {
@@ -4162,6 +4429,30 @@
       "updated_at": 1781011013.7990348,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091338.273461
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091338.273461,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "2837": {
@@ -4188,6 +4479,30 @@
       "updated_at": 1781011015.240997,
       "annotator_count": 1,
       "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 5,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091338.757111
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 5,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091338.757111,
+      "annotator_count": 1,
+      "required_annotator_count": 1
     }
   },
   "2838": {
@@ -4212,6 +4527,30 @@
       "other_issue": "",
       "note": "",
       "updated_at": 1781011016.310954,
+      "annotator_count": 1,
+      "required_annotator_count": 1
+    },
+    "fine_annotations": [
+      {
+        "username": "孙本元",
+        "mos": 4,
+        "has_defect": false,
+        "primary_issue": "",
+        "issues": [],
+        "other_issue": "",
+        "note": "",
+        "updated_at": 1781091339.224767
+      }
+    ],
+    "fine": {
+      "username": "孙本元",
+      "mos": 4,
+      "has_defect": false,
+      "primary_issue": "",
+      "issues": [],
+      "other_issue": "",
+      "note": "",
+      "updated_at": 1781091339.224767,
       "annotator_count": 1,
       "required_annotator_count": 1
     }

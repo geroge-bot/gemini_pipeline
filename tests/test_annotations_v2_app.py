@@ -1,3 +1,4 @@
+import gzip
 import json
 import sys
 import threading
@@ -27,6 +28,12 @@ def write_jsonl(path, rows):
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+def write_gzip_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False)
 
 
 def test_v2_json_file_writes_are_safe_when_concurrent(monkeypatch):
@@ -78,6 +85,7 @@ def test_v2_screening_record_updates_are_safe_when_concurrent(monkeypatch):
         [
             {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
             {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+            {"src_image": "src/c.jpg", "dst_image": "dst/c.jpg"},
         ],
     )
     store = AnnotationV2Store(tmp_path / "state.json")
@@ -120,7 +128,7 @@ def test_v2_screening_record_updates_are_safe_when_concurrent(monkeypatch):
     assert records["1"]["rough"]["username"] == "bob"
 
 
-def test_v2_records_are_saved_as_per_item_files():
+def test_v2_records_are_saved_as_compressed_per_item_files():
     from web.annotations_v2.app import AnnotationV2Store
 
     tmp_path = make_workspace_tmp()
@@ -140,12 +148,16 @@ def test_v2_records_are_saved_as_per_item_files():
 
     records_dir = Path(task["data_dir"]) / "records"
     assert records_dir.is_dir()
-    assert json.loads((records_dir / "0.json").read_text(encoding="utf-8"))["rough"]["username"] == "alice"
-    assert json.loads((records_dir / "1.json").read_text(encoding="utf-8"))["rough"]["username"] == "bob"
+    with gzip.open(records_dir / "0.json.gz", "rt", encoding="utf-8") as handle:
+        assert json.load(handle)["rough"]["username"] == "alice"
+    with gzip.open(records_dir / "1.json.gz", "rt", encoding="utf-8") as handle:
+        assert json.load(handle)["rough"]["username"] == "bob"
+    assert not (records_dir / "0.json").exists()
+    assert not (records_dir / "1.json").exists()
     assert not (Path(task["data_dir"]) / "records.json").exists()
 
 
-def test_v2_reads_legacy_records_json_and_new_item_records_together():
+def test_v2_reads_legacy_records_json_plain_shards_and_gzip_shards_together():
     from web.annotations_v2.app import AnnotationV2Store
 
     tmp_path = make_workspace_tmp()
@@ -165,17 +177,21 @@ def test_v2_reads_legacy_records_json_and_new_item_records_together():
         {
             "0": {"rough": {"username": "legacy", "mos": 3}},
             "1": {"rough": {"username": "legacy", "mos": 4}},
+            "2": {"rough": {"username": "legacy", "mos": 2}},
         },
     )
-    write_json(data_dir / "records" / "0.json", {"rough": {"username": "new", "mos": 5}})
+    write_json(data_dir / "records" / "0.json", {"rough": {"username": "plain", "mos": 5}})
+    write_gzip_json(data_dir / "records" / "0.json.gz", {"rough": {"username": "gzip", "mos": 5}})
+    write_json(data_dir / "records" / "2.json", {"rough": {"username": "plain-only", "mos": 4}})
 
     records = store._read_records(store._require_task(task["id"]))
 
-    assert records["0"]["rough"]["username"] == "new"
+    assert records["0"]["rough"]["username"] == "gzip"
     assert records["1"]["rough"]["username"] == "legacy"
+    assert records["2"]["rough"]["username"] == "plain-only"
 
 
-def test_v2_item_record_read_skips_legacy_records_when_shard_exists(monkeypatch):
+def test_v2_item_record_read_prefers_gzip_and_skips_legacy_records(monkeypatch):
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -186,7 +202,8 @@ def test_v2_item_record_read_skips_legacy_records_when_shard_exists(monkeypatch)
     task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
     data_dir = Path(task["data_dir"])
     write_json(data_dir / "records.json", {"0": {"rough": {"username": "legacy", "mos": 3}}})
-    write_json(data_dir / "records" / "0.json", {"rough": {"username": "new", "mos": 5}})
+    write_json(data_dir / "records" / "0.json", {"rough": {"username": "plain", "mos": 4}})
+    write_gzip_json(data_dir / "records" / "0.json.gz", {"rough": {"username": "gzip", "mos": 5}})
     original_read_json_file = annotations_v2_app.read_json_file
     legacy_reads = 0
 
@@ -200,8 +217,50 @@ def test_v2_item_record_read_skips_legacy_records_when_shard_exists(monkeypatch)
 
     record = store._read_record(store._require_task(task["id"]), 0)
 
-    assert record["rough"]["username"] == "new"
+    assert record["rough"]["username"] == "gzip"
     assert legacy_reads == 0
+
+
+def test_v2_item_record_read_falls_back_to_plain_shard_and_legacy_file():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    data_dir = Path(task["data_dir"])
+    write_json(data_dir / "records.json", {"1": {"rough": {"username": "legacy", "mos": 3}}})
+    write_json(data_dir / "records" / "0.json", {"rough": {"username": "plain", "mos": 4}})
+
+    stored_task = store._require_task(task["id"])
+
+    assert store._read_record(stored_task, 0)["rough"]["username"] == "plain"
+    assert store._read_record(stored_task, 1)["rough"]["username"] == "legacy"
+
+
+def test_v2_record_save_replaces_plain_shard_with_gzip_shard():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    records_dir = Path(task["data_dir"]) / "records"
+    write_json(records_dir / "0.json", {"rough": {"username": "plain", "mos": 4, "has_defect": False}})
+
+    store.save_rough(task["id"], 0, {"username": "plain", "mos": 5, "has_defect": False})
+
+    assert not (records_dir / "0.json").exists()
+    with gzip.open(records_dir / "0.json.gz", "rt", encoding="utf-8") as handle:
+        assert json.load(handle)["rough"]["mos"] == 5
 
 
 def make_test_image(path, size):
@@ -417,6 +476,37 @@ def test_v2_image_endpoint_caches_resized_preview_in_configured_dir():
         assert not (Path(task["data_dir"]) / "preview_cache").exists()
     finally:
         annotations_v2_app.store = old_store
+
+
+def test_v2_image_path_uses_cached_item_index_after_first_lookup(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    rows = [
+        {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+        for index in range(4)
+    ]
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, rows)
+
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    original_read_json_file = annotations_v2_app.read_json_file
+    item_reads = 0
+
+    def counting_read_json_file(path, default):
+        nonlocal item_reads
+        if Path(path).name == "items.json":
+            item_reads += 1
+        return original_read_json_file(path, default)
+
+    monkeypatch.setattr(annotations_v2_app, "read_json_file", counting_read_json_file)
+
+    assert store.image_path(task["id"], 0, "src") == tmp_path / "src" / "0.jpg"
+    assert store.image_path(task["id"], 3, "dst") == tmp_path / "dst" / "3.jpg"
+
+    assert item_reads <= 1
 
 
 def test_v2_preview_cache_job_generates_all_resized_image_previews():
@@ -990,6 +1080,184 @@ def test_v2_label_stage_hides_items_that_already_have_saved_labels():
 
     assert [item["item_index"] for item in label_items] == [1]
     assert store.summary(task["id"])["label_completed"] == 1
+
+
+def test_v2_save_label_rejects_stale_overwrite_from_another_user():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+            {"src_image": "src/c.jpg", "dst_image": "dst/c.jpg", "labels": {"输入图": {"菜品种类": "甜品"}}},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "stale label client",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+    for item_index in range(3):
+        store.save_rough(task["id"], item_index, {"username": "rough", "mos": 5, "has_defect": False})
+        store.save_fine(task["id"], item_index, {"username": "fine", "mos": 5, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+
+    alice_items = store.list_stage_items(task["id"], "label", username="alice", include_history=True, reserve_open_label_item=True)
+    bob_items = store.list_stage_items(task["id"], "label", username="bob", include_history=True, reserve_open_label_item=True)
+    assert [(item["item_index"], (item["record"].get("label_claim") or {}).get("username")) for item in alice_items] == [
+        (0, "alice"),
+        (1, None),
+        (2, None),
+    ]
+    assert [(item["item_index"], (item["record"].get("label_claim") or {}).get("username")) for item in bob_items] == [
+        (1, "bob"),
+        (2, None),
+    ]
+
+    store.save_label(task["id"], 2, {"username": "alice", "labels": {"输入图": {"菜品种类": "融合菜"}}})
+    try:
+        store.save_label(task["id"], 2, {"username": "bob", "labels": {"输入图": {"菜品种类": "西餐"}}})
+    except ValueError as exc:
+        assert str(exc) == "该图片已由其他用户完成标签纠错"
+    else:
+        raise AssertionError("expected stale label save to be rejected")
+
+    records = store._read_records(store._require_task(task["id"]))
+    assert records["2"]["label"]["username"] == "alice"
+    assert records["2"]["label"]["labels"] == {"输入图": {"菜品种类": "融合菜"}}
+
+
+def test_v2_unified_results_return_all_stage_data_from_gzip_records():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "unified",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+            "rough": {"min_mos": 4, "annotator_count": 1, "require_no_defect": True},
+            "fine": {"min_mos": 4, "annotator_count": 1},
+        }
+    )
+
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    store.save_fine(task["id"], 0, {"username": "bob", "mos": 4, "has_defect": False})
+    store.sample(task["id"], {"select_all": True})
+    store.save_label(task["id"], 0, {"username": "carol", "labels": {"输入图": {"菜品种类": "西餐"}}})
+
+    total, rows = store.get_unified_results(task["id"], offset=0, limit=1)
+
+    assert total == 2
+    assert rows[0]["item_index"] == 0
+    assert rows[0]["rough"]["username"] == "alice"
+    assert rows[0]["fine"]["username"] == "bob"
+    assert rows[0]["sampled"] is True
+    assert rows[0]["label"]["username"] == "carol"
+    assert rows[0]["effective_labels"] == {"输入图": {"菜品种类": "西餐"}}
+    assert rows[0]["original_labels"] == {"输入图": {"菜品种类": "中餐"}}
+    assert rows[0]["status"]["rough_passed"] is True
+    assert rows[0]["status"]["fine_passed"] is True
+
+
+def test_v2_unified_results_can_filter_by_status_and_labels():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg", "labels": {"输入图": {"菜品种类": "西餐"}}},
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "filters",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+            "rough": {"min_mos": 4, "annotator_count": 1, "require_no_defect": True},
+            "fine": {"min_mos": 4, "annotator_count": 1},
+        }
+    )
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    store.save_rough(task["id"], 1, {"username": "alice", "mos": 2, "has_defect": False})
+
+    total, rows = store.get_unified_results(
+        task["id"],
+        filters={
+            "statuses": ["rough_passed"],
+            "labels": [{"path": ["输入图", "菜品种类"], "values": ["中餐"]}],
+        },
+    )
+
+    assert total == 1
+    assert rows[0]["item_index"] == 0
+
+
+def test_v2_unified_label_edit_records_revision_history_in_gzip_shard():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}}],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "name": "label-edit",
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"]],
+        }
+    )
+
+    first = store.save_result_labels(
+        task["id"],
+        0,
+        {"username": "alice", "labels": {"输入图": {"菜品种类": "西餐"}}},
+    )
+    second = store.save_result_labels(
+        task["id"],
+        0,
+        {"username": "bob", "labels": {"输入图": {"菜品种类": "甜品"}}},
+    )
+
+    records_dir = Path(task["data_dir"]) / "records"
+    assert (records_dir / "0.json.gz").exists()
+    assert not (records_dir / "0.json").exists()
+    assert first["username"] == "alice"
+    assert second["username"] == "bob"
+    assert second["labels"] == {"输入图": {"菜品种类": "甜品"}}
+    assert len(second["label_revisions"]) == 2
+    assert second["label_revisions"][0]["username"] == "alice"
+    assert second["label_revisions"][0]["before"] == {"输入图": {"菜品种类": "中餐"}}
+    assert second["label_revisions"][0]["after"] == {"输入图": {"菜品种类": "西餐"}}
+    assert second["label_revisions"][1]["username"] == "bob"
+    assert second["label_revisions"][1]["before"] == {"输入图": {"菜品种类": "西餐"}}
+    assert second["label_revisions"][1]["after"] == {"输入图": {"菜品种类": "甜品"}}
 
 
 def test_v2_label_stage_reserves_open_item_for_current_user():
@@ -1804,6 +2072,102 @@ def test_v2_api_exposes_summary_and_stage_endpoints():
         annotations_v2_app.store = old_store
 
 
+def test_v2_stage_items_api_supports_offset_limit_paging():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"},
+            {"src_image": "src/b.jpg", "dst_image": "dst/b.jpg"},
+            {"src_image": "src/c.jpg", "dst_image": "dst/c.jpg"},
+        ],
+    )
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        client = annotations_v2_app.app.test_client()
+        task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+        response = client.get(f"/api/tasks/{task['id']}/items?stage=rough&username=alice&offset=1&limit=1")
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["total"] == 3
+        assert payload["offset"] == 1
+        assert payload["limit"] == 1
+        assert [item["item_index"] for item in payload["items"]] == [1]
+    finally:
+        annotations_v2_app.store = old_store
+
+
+def test_v2_api_exposes_unified_results_and_label_edit():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}}],
+    )
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True)
+    try:
+        client = annotations_v2_app.app.test_client()
+        task = annotations_v2_app.store.create_task(
+            {
+                "name": "api-unified",
+                "root_dir": str(tmp_path),
+                "jsonl_path": str(jsonl_path),
+                "selected_label_paths": [["输入图", "菜品种类"]],
+            }
+        )
+
+        edit_response = client.post(
+            f"/api/tasks/{task['id']}/results/0/labels",
+            json={"username": "alice", "labels": {"输入图": {"菜品种类": "西餐"}}},
+        )
+        response = client.get(f"/api/tasks/{task['id']}/results?page=0&limit=1")
+
+        assert edit_response.status_code == 200
+        assert edit_response.get_json()["record"]["username"] == "alice"
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total"] == 1
+        assert data["results"][0]["effective_labels"] == {"输入图": {"菜品种类": "西餐"}}
+        assert data["filter_options"]["statuses"]
+    finally:
+        annotations_v2_app.store = old_store
+
+
+def test_v2_export_includes_label_revisions():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}}],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"name": "export-revisions", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    store.save_result_labels(task["id"], 0, {"username": "alice", "labels": {"输入图": {"菜品种类": "西餐"}}})
+
+    rows = [json.loads(line) for line in store.export_jsonl(task["id"]).splitlines()]
+
+    assert rows[0]["corrected_labels"] == {"输入图": {"菜品种类": "西餐"}}
+    assert rows[0]["label_username"] == "alice"
+    assert rows[0]["label_revisions"][0]["username"] == "alice"
+
+
 def test_v2_update_task_api_refreshes_stage_configuration():
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
@@ -1918,6 +2282,41 @@ def test_v2_create_task_reports_missing_jsonl_as_bad_request():
         annotations_v2_app.app.config.update(PROPAGATE_EXCEPTIONS=None)
 
 
+def test_v2_create_task_reports_invalid_label_json_as_bad_request():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    label_dir = tmp_path / "labels"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    (label_dir / "src").mkdir(parents=True)
+    (label_dir / "src" / "a.json").write_text("{bad json", encoding="utf-8")
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True, PROPAGATE_EXCEPTIONS=False)
+    try:
+        client = annotations_v2_app.app.test_client()
+
+        response = client.post(
+            "/api/tasks",
+            json={
+                "name": "bad label",
+                "root_dir": str(tmp_path),
+                "jsonl_path": str(jsonl_path),
+                "label_dir": str(label_dir),
+            },
+        )
+
+        assert response.status_code == 400
+        assert "标签 JSON 不是合法 JSON" in response.get_json()["error"]
+        assert str(label_dir / "src" / "a.json") in response.get_json()["error"]
+    finally:
+        annotations_v2_app.store = old_store
+        annotations_v2_app.app.config.update(PROPAGATE_EXCEPTIONS=None)
+
+
 def test_v2_rate_page_route_and_main_page_are_separate():
     from web.annotations_v2 import app as annotations_v2_app
 
@@ -1949,7 +2348,7 @@ def test_v2_visualization_page_route_is_separate_from_rate_page():
     assert visualize_response.status_code == 200
     assert 'data-page="visualize"' in visualize_html
     assert 'data-task-id="task-123"' in visualize_html
-    assert 'id="visualizationStageTabs"' in visualize_html
+    assert 'id="visualizationStageTabs"' not in visualize_html
     assert 'id="visualizationBody"' in visualize_html
     assert 'id="visualizationResultPanel"' in visualize_html
     assert 'id="stageForm"' not in visualize_html
@@ -2080,12 +2479,12 @@ def test_v2_rate_paging_saves_forward_boundary_item_before_returning():
     assert "const movingPastLastItem = nextIndex > state.index && boundedIndex === state.index;" in script
     assert "if (boundedIndex === state.index && !movingPastLastItem) return;" in script
     assert "if (!(await saveCurrentStageBeforePageChange())) return;" in script
-    assert "const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;" in script
-    assert "await reloadCurrentStageAfterSave(preferredIndex);" in script
+    assert "state.rateHistory.push(state.items[state.index]);" in script
+    assert "await loadRateItemPage(state.rateOffset);" in script
     assert "if (movingPastLastItem) {" in script
 
 
-def test_v2_rate_paging_reloads_with_user_history_but_initial_entry_does_not():
+def test_v2_rate_paging_loads_one_unfinished_item_at_a_time():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
     open_stage_start = script.index("async function openStage")
     render_current_start = script.index("function renderCurrentItem", open_stage_start)
@@ -2096,30 +2495,27 @@ def test_v2_rate_paging_reloads_with_user_history_but_initial_entry_does_not():
     go_to_end = script.index("function goNextItem", go_to_start)
     go_to_body = script[go_to_start:go_to_end]
 
-    assert "function stageItemsUrl(taskId, stage, includeHistory = false)" in script
+    assert "function stageItemsUrl(taskId, stage, includeHistory = false, options = {})" in script
     assert "params.set(\"include_history\", \"1\");" in script
-    assert "stageItemsUrl(taskId, stage, true)" in open_stage_body
-    assert "state.index = firstUnannotatedItemIndex();" in open_stage_body
-    assert "stageItemsUrl(taskId, stage, true)" in reload_body
-    assert "const preferredIndex = nextIndex > state.index ? state.index + 1 : boundedIndex;" in go_to_body
+    assert "await loadRateItemPage(0);" in open_stage_body
+    assert "stageItemsUrl(state.activeTask.id, state.stage, false" in script
+    assert "state.items = data.items || [];" in script
+    assert "state.rateTotal = Number(data.total || 0);" in script
+    assert "await loadRateItemPage(state.rateOffset);" in reload_body
+    assert "await loadRateItemPage(state.rateOffset);" in go_to_body
 
 
-def test_v2_label_forward_paging_uses_local_queue_after_autosave():
+def test_v2_label_forward_paging_claims_next_item_after_autosave():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
     go_to_start = script.index("async function goToItem")
     go_to_end = script.index("function goNextItem", go_to_start)
     go_to_body = script[go_to_start:go_to_end]
 
-    assert 'if (state.stage === "label")' in go_to_body
-    label_branch_start = go_to_body.index('if (state.stage === "label")')
-    label_branch_end = go_to_body.index("await reloadCurrentStageAfterSave", label_branch_start)
-    label_branch = go_to_body[label_branch_start:label_branch_end]
-
-    assert "function advanceCurrentStageLocally(preferredIndex)" in script
-    assert "advanceCurrentStageLocally(preferredIndex);" in label_branch
-    assert "reloadCurrentStageAfterSave" not in label_branch
-    assert "loadTasks" not in label_branch
-    assert "stageItemsUrl" not in label_branch
+    assert "state.rateHistory.push(state.items[state.index]);" in go_to_body
+    assert "await loadRateItemPage(state.rateOffset);" in go_to_body
+    assert 'if (state.stage === "label")' not in go_to_body
+    assert "reloadCurrentStageAfterSave" not in go_to_body
+    assert "loadTasks" not in go_to_body
 
 
 def test_v2_rate_previous_page_does_not_require_saving_current_item():
@@ -2127,14 +2523,15 @@ def test_v2_rate_previous_page_does_not_require_saving_current_item():
     go_to_start = script.index("async function goToItem")
     go_to_end = script.index("function goNextItem", go_to_start)
     go_to_body = script[go_to_start:go_to_end]
-    previous_branch_start = go_to_body.index("if (nextIndex < state.index)")
+    previous_branch_start = go_to_body.index("if (nextIndex < 0)")
     previous_branch_end = go_to_body.index("if (!(await saveCurrentStageBeforePageChange())) return;")
     previous_branch = go_to_body[previous_branch_start:previous_branch_end]
 
     assert "function itemHasCurrentUserAnnotation(item)" in script
     assert "function firstUnannotatedItemIndex()" in script
-    assert "if (nextIndex < state.index)" in go_to_body
-    assert "state.index = boundedIndex;" in previous_branch
+    assert "if (nextIndex < 0)" in go_to_body
+    assert "const previousItem = state.rateHistory.pop();" in previous_branch
+    assert "state.items = [previousItem];" in previous_branch
     assert "renderCurrentItem();" in previous_branch
     assert "saveCurrentStageBeforePageChange" not in previous_branch
 
@@ -2160,7 +2557,7 @@ def test_v2_save_button_refreshes_queue_without_skipping_or_wrapping():
     save_stage_body = script[save_stage_start:collect_payload_start]
 
     assert "function reloadCurrentStageAfterSave(preferredIndex)" in script
-    assert "await reloadCurrentStageAfterSave(state.index);" in save_stage_body
+    assert "await loadRateItemPage(state.rateOffset);" in save_stage_body
     assert "const nextIndex = Math.min(state.index + 1" not in save_stage_body
     assert "await openStage(state.activeTask.id, state.stage);" not in save_stage_body
 
@@ -2223,6 +2620,19 @@ def test_v2_frontend_preloads_next_three_preview_pages():
     assert "function preloadVisualizationPageImages(page)" in script
 
 
+def test_v2_frontend_pages_rate_items_instead_of_loading_full_stage():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "const RATE_PAGE_SIZE = 1;" in script
+    assert "async function loadRateItemPage(offset = 0)" in script
+    assert "limit: RATE_PAGE_SIZE," in script
+    assert "state.rateTotal = Number(data.total || 0);" in script
+    assert "await loadRateItemPage(0);" in script
+    assert "await loadRateItemPage(state.rateOffset);" in script
+    assert "state.items = data.items || [];" in script
+    assert "const data = await api(stageItemsUrl(taskId, stage, true));" not in script
+
+
 def test_v2_frontend_renders_collapsed_generation_prompt_markdown_below_images():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
     styles = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "styles.css").read_text(encoding="utf-8")
@@ -2275,19 +2685,26 @@ def test_v2_label_correction_uses_choice_bars_instead_of_text_inputs():
     assert '.labelOption input[type="radio"]' in styles
 
 
-def test_v2_frontend_links_and_renders_stage_visualization_pages():
+def test_v2_frontend_links_and_renders_unified_visualization_page():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert '`/dataset/visualize/${task.id}?stage=rough`' in script
-    assert '`/dataset/visualize/${task.id}?stage=fine`' in script
-    assert '`/dataset/visualize/${task.id}?stage=sample`' in script
-    assert '`/dataset/visualize/${task.id}?stage=label`' in script
+    assert '`/dataset/visualize/${task.id}`' in script
+    assert '`/dataset/visualize/${task.id}?stage=rough`' not in script
+    assert '`/dataset/visualize/${task.id}?stage=fine`' not in script
+    assert '`/dataset/visualize/${task.id}?stage=sample`' not in script
+    assert '`/dataset/visualize/${task.id}?stage=label`' not in script
     assert "openVisualizationPage" in script
     assert "reloadVisualizationResults" in script
     assert "renderVisualizationPage" in script
-    assert "renderScreeningVisualization" in script
-    assert "renderSampleVisualization" in script
-    assert "renderLabelVisualization" in script
+    assert "/api/tasks/${state.taskId}/results?" in script
+    assert "/api/tasks/${state.taskId}/visualization-results?" not in script
+    assert "renderUnifiedResultPanel" in script
+    assert "beginVisualizationLabelEdit" in script
+    assert "saveVisualizationLabels" in script
+    assert "/api/tasks/${state.taskId}/results/${item.item_index}/labels" in script
+    assert "renderScreeningVisualization" not in script
+    assert "renderSampleVisualization" not in script
+    assert "renderLabelVisualization" not in script
 
 
 def test_v2_visualization_frontend_exposes_filter_controls():
@@ -2303,6 +2720,7 @@ def test_v2_visualization_frontend_exposes_filter_controls():
     assert 'class="panel visualizationFilterPanel hidden"' not in visualize_template
     assert "visualizationFilters" in script
     assert "visualizationFilterOptions" in script
+    assert '"状态", options.statuses || [], "statuses"' in script
     assert "renderVisualizationFilterPanel" in script
     assert "collectVisualizationFilters" in script
     assert "buildVisualizationFilterPayload" in script
@@ -2312,6 +2730,7 @@ def test_v2_visualization_frontend_exposes_filter_controls():
     assert '"标注者", options.annotators || [], "annotators"' in script
     assert 'renderVisualizationFilterGroup(dimension.name, dimension.options || [], "label", selected, path)' in script
     assert 'input.dataset.visualizationFilterType === "mos"' in script
+    assert 'input.dataset.visualizationFilterType === "statuses"' in script
     assert 'input.dataset.visualizationFilterType === "has_defect"' in script
     assert 'input.dataset.visualizationFilterType === "annotators"' in script
     assert 'input.dataset.visualizationFilterType === "label"' in script

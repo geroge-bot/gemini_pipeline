@@ -13,11 +13,15 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
 
 
 def _guide(label: str) -> dict:
-    return {
-        "场景描述": f"场景{label}",
-        "整体引导": f"整体引导{label}",
-        "摆盘描述": f"摆盘描述{label}",
-    }
+    return [
+        {
+            "场景描述": f"场景{label}",
+            "整体引导": f"整体引导{label}",
+            "摆盘描述": f"摆盘描述{label}",
+            "调用标签": ["微调级", "通俗级", "视觉表现"],
+            "整体引导重写": f"整体引导重写{label}",
+        },
+    ]
 
 
 def test_generate_user_guides_jsonl_writes_checkpoints(tmp_path: Path, monkeypatch) -> None:
