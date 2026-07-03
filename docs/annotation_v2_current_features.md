@@ -344,7 +344,7 @@ python scripts/import_annotations_v2_rough_jsonl.py \
   --list-tasks
 ```
 
-脚本按 `原图 + 生成图` 与任务 `items.json` 的 `src_image + dst_image` 匹配，同时兼容绝对路径、Windows 反斜杠和相对 `root_dir` 的路径。`--task` 支持任务 id 或任务名，匹配时会忽略首尾空格；任务名包含空格时，命令行中需要用引号包起来。写入时调用 `AnnotationV2Store.save_rough()`，因此会沿用粗筛人数上限、同用户覆盖、聚合结果和 summary stale 标记等现有规则。达到粗筛人数上限的行会跳过并计入 `capacity_skipped`。
+脚本按 `原图 + 生成图` 与任务 `items.json` 的 `src_image + dst_image` 匹配，同时兼容绝对路径、Windows 反斜杠和相对 `root_dir` 的路径。`--task` 支持任务 id 或任务名，匹配时会忽略首尾空格；任务名包含空格时，命令行中需要用引号包起来。写入时调用 `AnnotationV2Store.save_rough()`，因此会沿用粗筛人数上限、同用户覆盖和聚合结果等现有规则。达到粗筛人数上限的行会跳过并计入 `capacity_skipped`。`--apply` 写入完成后会刷新任务 `summary.json` 快照，脚本输出中也会包含刷新后的 `summary`，便于网页端立即显示新的标注进度。
 
 ## 9. 导出 JSONL
 

@@ -267,6 +267,9 @@ def import_rough_jsonl(
             raise
         stats["imported"] += 1
 
+    if apply and stats["imported"]:
+        stats["summary"] = store._refresh_summary_snapshot(task)
+
     return stats
 
 

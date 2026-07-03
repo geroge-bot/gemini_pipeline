@@ -71,7 +71,7 @@ def test_import_rough_jsonl_dry_run_matches_without_writing_records():
     assert store._read_records(store._require_task(task["id"])) == {}
 
 
-def test_import_rough_jsonl_apply_writes_v2_rough_record_and_summary_stale():
+def test_import_rough_jsonl_apply_writes_v2_rough_record_and_refreshes_summary():
     from scripts.import_annotations_v2_rough_jsonl import import_rough_jsonl
 
     tmp_path = make_workspace_tmp()
@@ -89,6 +89,8 @@ def test_import_rough_jsonl_apply_writes_v2_rough_record_and_summary_stale():
     assert result["dry_run"] is False
     assert result["matched"] == 1
     assert result["imported"] == 1
+    assert result["summary"]["rough_annotation_completed"] == 1
+    assert result["summary"]["rough_rounds"][0] == {"round": 1, "completed": 1, "total": 2}
     records_dir = Path(task["data_dir"]) / "records"
     with gzip.open(records_dir / "0.json.gz", "rt", encoding="utf-8") as handle:
         record = json.load(handle)
@@ -98,7 +100,8 @@ def test_import_rough_jsonl_apply_writes_v2_rough_record_and_summary_stale():
     assert record["rough_annotations"][0]["username"] == "alice"
     assert record["rough_annotations"][0]["mos"] == 3
     summary = json.loads((Path(task["data_dir"]) / "summary.json").read_text(encoding="utf-8"))
-    assert summary["stale"] is True
+    assert summary["stale"] is False
+    assert summary["rough_annotation_completed"] == 1
 
 
 def test_import_rough_jsonl_matches_task_name_after_trimming_whitespace():
