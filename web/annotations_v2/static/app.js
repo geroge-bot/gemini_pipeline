@@ -24,7 +24,7 @@ const state = {
 };
 
 const TASK_ADMIN_USERNAME = "孙本猿";
-const RATE_PAGE_SIZE = 1;
+const RATE_PAGE_SIZE = 4;
 const PRELOAD_FORWARD_PAGES = 3;
 const MAX_PRELOADED_IMAGES = 48;
 const preloadedImages = new Map();
@@ -194,6 +194,11 @@ function showApp() {
 }
 
 async function enterApp() {
+  const session = await api("/api/session");
+  if (session.username) {
+    state.username = session.username;
+    localStorage.setItem("annotations_v2.username", state.username);
+  }
   if (!state.username) {
     showLogin();
     return;
@@ -238,7 +243,7 @@ async function loadTasks(options = {}) {
   const data = await api("/api/tasks");
   state.tasks = data.tasks || [];
   if ($("taskList")) renderTasks();
-  if (refreshSummaries) refreshTaskSummaries();
+  if (refreshSummaries) refreshTaskSummaries().catch((error) => console.warn(error));
 }
 
 async function loadTask(taskId) {
@@ -255,11 +260,22 @@ async function loadTask(taskId) {
   return task;
 }
 
-function refreshTaskSummaries() {
+async function refreshTaskSummaries() {
   if (!$("taskList") || !state.tasks.length) return;
-  for (const task of state.tasks) {
-    refreshTaskSummary(task.id).catch((error) => console.warn(error));
-  }
+  const pending = state.tasks.filter((task) => task.summary?.stale !== false);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < pending.length) {
+      const task = pending[nextIndex];
+      nextIndex += 1;
+      try {
+        await refreshTaskSummary(task.id);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, pending.length) }, worker));
 }
 
 async function refreshTaskSummary(taskId) {
@@ -297,15 +313,22 @@ function renderTasks() {
       <div class="taskActions">
         <a class="buttonLike ghost" href="${`/dataset/visualize/${task.id}`}">结果展示</a>
         <a class="buttonLike ghost" data-action="issues" href="${`/dataset/visualize/${task.id}?view=issues`}">Issues</a>
-        <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
-        <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
-        <button class="ghost" data-action="cache-previews" data-id="${task.id}" type="button">缓存图片</button>
         <a class="buttonLike ghost" href="/api/tasks/${task.id}/download">导出</a>
-        ${deleteTaskButton(task)}
+        ${taskManagementButtons(task)}
       </div>
     `;
     list.appendChild(card);
   }
+}
+
+function taskManagementButtons(task) {
+  if (!canManageTasks()) return "";
+  return `
+    <button class="ghost" data-action="edit" data-id="${task.id}" type="button">编辑</button>
+    <button class="ghost" data-action="import" data-id="${task.id}" type="button">导入</button>
+    <button class="ghost" data-action="cache-previews" data-id="${task.id}" type="button">缓存图片</button>
+    ${deleteTaskButton(task)}
+  `;
 }
 
 function deleteTaskButton(task) {
@@ -382,7 +405,10 @@ async function warmPreviewCache(taskId, button) {
     button.textContent = "缓存中 0%";
   }
   try {
-    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs`, { method: "POST" });
+    const data = await api(`/api/tasks/${taskId}/preview-cache/jobs`, {
+      method: "POST",
+      body: JSON.stringify({ username: state.username }),
+    });
     const job = await waitForPreviewCacheJob(taskId, data.job.id, button);
     const result = job.result || {};
     showToast(`图片缓存完成：生成 ${result.generated_count || 0}，跳过 ${result.skipped_count || 0}，失败 ${result.failed_count || 0}`);
@@ -412,7 +438,7 @@ async function importTaskAnnotations(taskId) {
   if (!jsonlPath || !jsonlPath.trim()) return;
   const data = await api(`/api/tasks/${taskId}/import`, {
     method: "POST",
-    body: JSON.stringify({ jsonl_path: jsonlPath.trim() }),
+    body: JSON.stringify({ jsonl_path: jsonlPath.trim(), username: state.username }),
   });
   const result = data.result || {};
   showToast(`导入完成：更新 ${result.imported_count || 0} 条，跳过 ${result.skipped_count || 0} 条，未匹配 ${result.unmatched_count || 0} 条`);
@@ -470,6 +496,7 @@ async function saveTaskEdits(event) {
   await api(`/api/tasks/${state.editingTaskId}`, {
     method: "PATCH",
     body: JSON.stringify({
+      username: state.username,
       rough: { issue_options: parseList($("editIssueOptionsInput").value) },
       selected_label_paths: parseLabelPaths($("editLabelPathsInput").value),
       generation_prompt_dir: $("editGenerationPromptDirInput").value.trim(),
@@ -927,7 +954,12 @@ async function saveStage(event) {
 
 function collectCurrentStagePayload() {
   if (state.stage === "label") {
-    return { username: state.username, labels: collectLabels() };
+    const item = state.items[state.index] || {};
+    return {
+      username: state.username,
+      labels: collectLabels(),
+      claim_id: item.record?.label_claim?.id || "",
+    };
   }
   return collectScreeningPayload();
 }
@@ -946,6 +978,8 @@ async function openSamplePage() {
   if ($("sampleTitle")) {
     $("sampleTitle").textContent = `${state.activeTask?.name || "任务"} · 数据采样`;
   }
+  if ($("runSampleBtn")) $("runSampleBtn").disabled = !canManageTasks();
+  if ($("selectAllSampleBtn")) $("selectAllSampleBtn").disabled = !canManageTasks();
   await reloadSampleBuckets();
 }
 
@@ -999,7 +1033,9 @@ function selectAllSampleBuckets() {
 
 async function runSample(selectAll = false) {
   if (!state.taskId) return;
+  if (!canManageTasks()) throw new Error("只有任务管理员可以执行采样");
   const payload = selectAll ? { select_all: true } : { selections: collectSampleSelections() };
+  payload.username = state.username;
   if (!selectAll && !payload.selections.length) {
     showToast("请先选择需要采样的数据量");
     return;
@@ -1257,9 +1293,11 @@ function beginVisualizationLabelEdit(row) {
   const save = () => {
     if (saved) return;
     saved = true;
-    const nextLabels = mergeLabelObjects(item.effective_labels || item.original_labels || {}, {});
-    setNested(nextLabels, path, editor.value);
-    saveVisualizationLabels(item, nextLabels).catch((error) => showToast(error.message));
+    saveVisualizationLabelPath(item, path, editor.value).catch(async (error) => {
+      showToast(error.message);
+      await reloadVisualizationResults();
+      renderVisualizationPage();
+    });
   };
   editor.addEventListener("change", save);
   editor.addEventListener("keydown", (event) => {
@@ -1269,13 +1307,18 @@ function beginVisualizationLabelEdit(row) {
   editor.addEventListener("blur", save, { once: true });
 }
 
-async function saveVisualizationLabels(item, labels) {
+async function saveVisualizationLabelPath(item, path, value) {
   if (!state.username) {
     throw new Error("请先登录");
   }
   const data = await api(`/api/tasks/${state.taskId}/results/${item.item_index}/labels`, {
     method: "POST",
-    body: JSON.stringify({ username: state.username, labels }),
+    body: JSON.stringify({
+      username: state.username,
+      path,
+      value,
+      base_revision: (item.label_revisions || []).length,
+    }),
   });
   item.label = {
     username: data.record.username,

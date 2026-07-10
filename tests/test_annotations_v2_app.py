@@ -1,5 +1,6 @@
 import gzip
 import json
+import multiprocessing
 import sys
 import threading
 import time
@@ -34,6 +35,29 @@ def write_gzip_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "wt", encoding="utf-8") as handle:
         json.dump(data, handle, ensure_ascii=False)
+
+
+def hold_v2_path_lock(path, entered, release):
+    from web.annotations_v2.app import path_transaction_lock
+
+    with path_transaction_lock(Path(path)):
+        entered.set()
+        release.wait(timeout=5)
+
+
+def wait_for_v2_path_lock(path, acquired):
+    from web.annotations_v2.app import path_transaction_lock
+
+    with path_transaction_lock(Path(path)):
+        acquired.set()
+
+
+def save_v2_rough_in_process(state_path, task_id, username, start):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    store = AnnotationV2Store(state_path)
+    start.wait(timeout=5)
+    store.save_rough(task_id, 0, {"username": username, "mos": 5, "has_defect": False})
 
 
 def test_v2_json_file_writes_are_safe_when_concurrent(monkeypatch):
@@ -73,6 +97,108 @@ def test_v2_json_file_writes_are_safe_when_concurrent(monkeypatch):
 
     assert errors == []
     assert json.loads(path.read_text(encoding="utf-8")) in [{"writer": "alice"}, {"writer": "bob"}]
+
+
+def test_v2_path_transaction_lock_serializes_processes():
+    tmp_path = make_workspace_tmp()
+    lock_target = tmp_path / "records" / "task-mutation"
+    context = multiprocessing.get_context("spawn")
+    entered = context.Event()
+    release = context.Event()
+    acquired = context.Event()
+    holder = context.Process(target=hold_v2_path_lock, args=(str(lock_target), entered, release))
+    waiter = context.Process(target=wait_for_v2_path_lock, args=(str(lock_target), acquired))
+
+    holder.start()
+    assert entered.wait(timeout=5)
+    waiter.start()
+    assert not acquired.wait(timeout=0.15)
+    release.set()
+    assert acquired.wait(timeout=5)
+    holder.join(timeout=5)
+    waiter.join(timeout=5)
+
+    assert holder.exitcode == 0
+    assert waiter.exitcode == 0
+
+
+def test_v2_bulk_and_item_updates_share_one_task_transaction():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "rough": {"annotator_count": 2},
+        }
+    )
+    stored_task = store._require_task(task["id"])
+    bulk_entered = threading.Event()
+    release_bulk = threading.Event()
+
+    def bulk_mutate(records):
+        records.setdefault("0", {})["bulk_marker"] = True
+        bulk_entered.set()
+        release_bulk.wait(timeout=5)
+        return None, {0}
+
+    with RealThreadPoolExecutor(max_workers=2) as executor:
+        bulk_future = executor.submit(store._update_records, stored_task, bulk_mutate)
+        assert bulk_entered.wait(timeout=5)
+        save_future = executor.submit(
+            store.save_rough,
+            task["id"],
+            0,
+            {"username": "alice", "mos": 5, "has_defect": False},
+        )
+        time.sleep(0.05)
+        assert not save_future.done()
+        release_bulk.set()
+        bulk_future.result(timeout=5)
+        save_future.result(timeout=5)
+
+    record = store._read_record(stored_task, 0)
+    assert record["bulk_marker"] is True
+    assert record["rough"]["username"] == "alice"
+
+
+def test_v2_two_processes_preserve_both_annotators():
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    state_path = tmp_path / "state.json"
+    store = AnnotationV2Store(state_path)
+    task = store.create_task(
+        {
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "rough": {"annotator_count": 2},
+        }
+    )
+    context = multiprocessing.get_context("spawn")
+    start = context.Event()
+    workers = [
+        context.Process(
+            target=save_v2_rough_in_process,
+            args=(str(state_path), task["id"], username, start),
+        )
+        for username in ("alice", "bob")
+    ]
+    for worker in workers:
+        worker.start()
+    start.set()
+    for worker in workers:
+        worker.join(timeout=5)
+
+    record = store._read_record(store._require_task(task["id"]), 0)
+    assert [worker.exitcode for worker in workers] == [0, 0]
+    assert {entry["username"] for entry in record["rough_annotations"]} == {"alice", "bob"}
 
 
 def test_v2_screening_record_updates_are_safe_when_concurrent(monkeypatch):
@@ -263,6 +389,142 @@ def test_v2_record_save_replaces_plain_shard_with_gzip_shard():
         assert json.load(handle)["rough"]["mos"] == 5
 
 
+def test_v2_record_cache_avoids_reopening_all_shards(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(3)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    records_dir = Path(task["data_dir"]) / "records"
+    for index in range(3):
+        write_gzip_json(records_dir / f"{index}.json.gz", {"sampled": True})
+
+    original_read = annotations_v2_app.read_gzip_json_file
+    read_count = 0
+
+    def counting_read(path, default):
+        nonlocal read_count
+        read_count += 1
+        return original_read(path, default)
+
+    monkeypatch.setattr(annotations_v2_app, "read_gzip_json_file", counting_read)
+    store.list_stage_items_page(task["id"], "rough", username="alice", offset=0, limit=1)
+    first_read_count = read_count
+    store.list_stage_items_page(task["id"], "rough", username="bob", offset=0, limit=1)
+
+    assert first_read_count == 3
+    assert read_count == first_read_count
+
+
+def test_v2_sqlite_record_cache_survives_store_restart(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(3)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    stored_task = store._require_task(task["id"])
+    for index in range(3):
+        store._write_record(stored_task, index, {"sampled": True, "sample_bucket": str(index)})
+    assert (Path(task["data_dir"]) / "records-cache.sqlite3").exists()
+
+    restarted_store = AnnotationV2Store(tmp_path / "state.json")
+
+    def fail_gzip_read(path, default):
+        raise AssertionError(f"sqlite cache should avoid gzip read: {path}")
+
+    monkeypatch.setattr(annotations_v2_app, "read_gzip_json_file", fail_gzip_read)
+    records = restarted_store._read_records(restarted_store._require_task(task["id"]))
+
+    assert records["0"]["sample_bucket"] == "0"
+    assert records["2"]["sample_bucket"] == "2"
+
+
+def test_v2_label_claim_writes_only_changed_record(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(3)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    stored_task = store._require_task(task["id"])
+    for index in range(3):
+        store._write_record(stored_task, index, {"sampled": True})
+
+    original_write_record = store._write_record
+    written_indexes = []
+
+    def counting_write(task_payload, item_index, record):
+        written_indexes.append(int(item_index))
+        return original_write_record(task_payload, item_index, record)
+
+    monkeypatch.setattr(store, "_write_record", counting_write)
+    page = store.list_stage_items_page(
+        task["id"],
+        "label",
+        username="alice",
+        reserve_open_label_item=True,
+        offset=0,
+        limit=1,
+    )
+
+    assert len(page["items"]) == 1
+    assert written_indexes == [page["items"][0]["item_index"]]
+
+
+def test_v2_unfiltered_result_page_reads_only_page_records(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {"src_image": f"src/{index}.jpg", "dst_image": f"dst/{index}.jpg"}
+            for index in range(3)
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    read_indexes = []
+    original_read_record = store._read_record
+
+    def counting_read(task_payload, item_index):
+        read_indexes.append(int(item_index))
+        return original_read_record(task_payload, item_index)
+
+    monkeypatch.setattr(store, "_read_record", counting_read)
+    total, rows = store.get_unified_results(task["id"], offset=1, limit=1)
+
+    assert total == 3
+    assert rows[0]["item_index"] == 1
+    assert read_indexes == [1]
+
+
 def make_test_image(path, size):
     from PIL import Image
 
@@ -447,6 +709,7 @@ def test_v2_image_endpoint_serves_cached_preview_and_can_return_original():
         assert max(preview.size) == 1024
         assert original.size == (2048, 512)
         assert preview_response.headers["X-Annotation-Preview-Cache"] == "hit"
+        assert "max-age=300" in preview_response.headers["Cache-Control"]
     finally:
         annotations_v2_app.store = old_store
 
@@ -540,7 +803,10 @@ def test_v2_preview_cache_job_generates_all_resized_image_previews():
         task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
         client = annotations_v2_app.app.test_client()
 
-        start_response = client.post(f"/api/tasks/{task['id']}/preview-cache/jobs")
+        start_response = client.post(
+            f"/api/tasks/{task['id']}/preview-cache/jobs",
+            json={"username": "孙本猿"},
+        )
 
         assert start_response.status_code == 202
         job_id = start_response.get_json()["job"]["id"]
@@ -564,7 +830,7 @@ def test_v2_preview_cache_job_generates_all_resized_image_previews():
         annotations_v2_app.store = old_store
 
 
-def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
+def test_v2_preview_cache_uses_bounded_worker_threads(monkeypatch):
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -611,7 +877,7 @@ def test_v2_preview_cache_uses_sixteen_worker_threads(monkeypatch):
 
     result = store.warm_preview_cache(task["id"])
 
-    assert worker_counts == [16]
+    assert worker_counts == [4]
     assert max_active_count > 1
     assert result["total"] == 16
     assert result["processed_count"] == 16
@@ -659,6 +925,31 @@ def test_v2_preview_cache_deduplicates_repeated_image_paths(monkeypatch):
     }
 
 
+def test_v2_preview_cache_remembers_images_that_do_not_need_resize(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    make_test_image(tmp_path / "src" / "a.jpg", (128, 128))
+    make_test_image(tmp_path / "dst" / "a.jpg", (128, 128))
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+
+    first = store.warm_preview_cache(task["id"])
+
+    def fail_resize(path, cache_dir, max_edge=1024):
+        raise AssertionError("small image marker should skip repeat decode")
+
+    monkeypatch.setattr(annotations_v2_app, "resized_image_file", fail_resize)
+    second = store.warm_preview_cache(task["id"])
+
+    assert first["skipped_count"] == 2
+    assert second["skipped_count"] == 2
+    assert len(list(store.preview_cache_dir(task["id"]).glob("*.skip"))) == 2
+
+
 def test_v2_preview_cache_job_reuses_running_task_job(monkeypatch):
     from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
 
@@ -689,6 +980,42 @@ def test_v2_preview_cache_job_reuses_running_task_job(monkeypatch):
     assert second["id"] == first["id"]
 
 
+def test_v2_preview_cache_job_is_visible_to_another_job_manager(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    first_manager = PreviewCacheJobs(store)
+    second_manager = PreviewCacheJobs(store)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_warm_preview_cache(task_id, progress_callback=None):
+        started.set()
+        release.wait(timeout=2)
+        return {"total": 0, "processed_count": 0, "generated_count": 0, "skipped_count": 0, "failed_count": 0, "failures": []}
+
+    monkeypatch.setattr(store, "warm_preview_cache", slow_warm_preview_cache)
+    first = first_manager.start(task["id"])
+    assert started.wait(timeout=1)
+    observed = second_manager.get(first["id"], task_id=task["id"])
+    reused = second_manager.start(task["id"])
+    release.set()
+    completed = None
+    for _ in range(50):
+        completed = second_manager.get(first["id"], task_id=task["id"])
+        if completed and completed.get("status") == "completed":
+            break
+        time.sleep(0.01)
+
+    assert observed["id"] == first["id"]
+    assert reused["id"] == first["id"]
+    assert completed["status"] == "completed"
+
+
 def test_v2_preview_cache_job_reuses_job_when_started_concurrently(monkeypatch):
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store, PreviewCacheJobs
@@ -713,10 +1040,19 @@ def test_v2_preview_cache_job_reuses_job_when_started_concurrently(monkeypatch):
 
     def synchronized_uuid4():
         nonlocal uuid_count
-        uuid_barrier.wait(timeout=5)
         with uuid_lock:
             uuid_count += 1
-            return f"job-{uuid_count}"
+            current = uuid_count
+        if current <= 2:
+            uuid_barrier.wait(timeout=5)
+        return type(
+            "FakeUuid",
+            (),
+            {
+                "hex": f"hex-{current}",
+                "__str__": lambda self: f"job-{current}",
+            },
+        )()
 
     monkeypatch.setattr(store, "warm_preview_cache", slow_warm_preview_cache)
     monkeypatch.setattr(annotations_v2_app.uuid, "uuid4", synchronized_uuid4)
@@ -860,6 +1196,47 @@ def test_v2_list_tasks_uses_cached_summary_snapshot(monkeypatch):
     tasks = store.list_tasks()
 
     assert tasks[0]["summary"]["cached_marker"] == "snapshot"
+
+
+def test_v2_summary_refresh_cannot_publish_stale_snapshot_after_save(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    stored_task = store._require_task(task["id"])
+    store._mark_summary_stale(stored_task)
+    original_calculate = store._calculate_summary
+    calculated = threading.Event()
+    release_summary = threading.Event()
+
+    def paused_calculate(task_payload):
+        result = original_calculate(task_payload)
+        calculated.set()
+        release_summary.wait(timeout=5)
+        return result
+
+    monkeypatch.setattr(store, "_calculate_summary", paused_calculate)
+    with RealThreadPoolExecutor(max_workers=2) as executor:
+        summary_future = executor.submit(store.summary, task["id"])
+        assert calculated.wait(timeout=5)
+        save_future = executor.submit(
+            store.save_rough,
+            task["id"],
+            0,
+            {"username": "alice", "mos": 5, "has_defect": False},
+        )
+        time.sleep(0.05)
+        assert not save_future.done()
+        release_summary.set()
+        summary_future.result(timeout=5)
+        save_future.result(timeout=5)
+
+    snapshot = store._summary_snapshot(stored_task)
+    assert store._read_record(stored_task, 0)["rough"]["username"] == "alice"
+    assert snapshot["stale"] is True
 
 
 def test_v2_get_task_payload_uses_cached_summary_without_listing_all_tasks(monkeypatch):
@@ -1403,6 +1780,29 @@ def test_v2_unified_results_filter_options_are_loaded_from_dedicated_endpoint(mo
         annotations_v2_app.store = old_store
 
 
+def test_v2_unified_filter_options_are_cached_until_records_change(monkeypatch):
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg", "labels": {"输入图": {"菜品种类": "中餐"}}}],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
+    store.save_rough(task["id"], 0, {"username": "alice", "mos": 5, "has_defect": False})
+    first = store.get_unified_filter_options(task["id"])
+
+    def fail_records_reference(task_payload):
+        raise AssertionError("unchanged filter options should use cache")
+
+    monkeypatch.setattr(store, "_records_reference", fail_records_reference)
+    second = store.get_unified_filter_options(task["id"])
+
+    assert second == first
+
+
 def test_v2_unified_label_edit_records_revision_history_in_gzip_shard():
     from web.annotations_v2.app import AnnotationV2Store
 
@@ -1446,6 +1846,71 @@ def test_v2_unified_label_edit_records_revision_history_in_gzip_shard():
     assert second["label_revisions"][1]["username"] == "bob"
     assert second["label_revisions"][1]["before"] == {"输入图": {"菜品种类": "西餐"}}
     assert second["label_revisions"][1]["after"] == {"输入图": {"菜品种类": "甜品"}}
+
+
+def test_v2_unified_label_path_edit_rejects_stale_revision_and_preserves_other_fields():
+    from web.annotations_v2.app import AnnotationV2Store, ConflictError
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        jsonl_path,
+        [
+            {
+                "src_image": "src/a.jpg",
+                "dst_image": "dst/a.jpg",
+                "labels": {"输入图": {"菜品种类": "中餐", "拍摄场景": "室内"}},
+            }
+        ],
+    )
+    store = AnnotationV2Store(tmp_path / "state.json")
+    task = store.create_task(
+        {
+            "root_dir": str(tmp_path),
+            "jsonl_path": str(jsonl_path),
+            "selected_label_paths": [["输入图", "菜品种类"], ["输入图", "拍摄场景"]],
+        }
+    )
+
+    first = store.save_result_labels(
+        task["id"],
+        0,
+        {
+            "username": "alice",
+            "path": ["输入图", "菜品种类"],
+            "value": "西餐",
+            "base_revision": 0,
+        },
+    )
+    try:
+        store.save_result_labels(
+            task["id"],
+            0,
+            {
+                "username": "bob",
+                "path": ["输入图", "拍摄场景"],
+                "value": "室外",
+                "base_revision": 0,
+            },
+        )
+    except ConflictError:
+        pass
+    else:
+        raise AssertionError("stale label revision should be rejected")
+    second = store.save_result_labels(
+        task["id"],
+        0,
+        {
+            "username": "bob",
+            "path": ["输入图", "拍摄场景"],
+            "value": "室外",
+            "base_revision": 1,
+        },
+    )
+
+    assert first["labels"] == {"输入图": {"菜品种类": "西餐", "拍摄场景": "室内"}}
+    assert second["labels"] == {"输入图": {"菜品种类": "西餐", "拍摄场景": "室外"}}
+    assert len(second["label_revisions"]) == 2
 
 
 def test_v2_label_stage_reserves_open_item_for_current_user():
@@ -2094,7 +2559,10 @@ def test_v2_import_annotations_api_accepts_jsonl_path():
         task = annotations_v2_app.store.create_task({"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)})
         client = annotations_v2_app.app.test_client()
 
-        response = client.post(f"/api/tasks/{task['id']}/import", json={"jsonl_path": str(import_path)})
+        response = client.post(
+            f"/api/tasks/{task['id']}/import",
+            json={"jsonl_path": str(import_path), "username": "孙本猿"},
+        )
 
         assert response.status_code == 200
         payload = response.get_json()
@@ -2384,6 +2852,43 @@ def test_v2_api_exposes_summary_and_stage_endpoints():
         annotations_v2_app.store = old_store
 
 
+def test_v2_trusted_header_auth_rejects_missing_identity_and_overrides_payload(monkeypatch):
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True, PROPAGATE_EXCEPTIONS=False)
+    monkeypatch.setenv("ANNOTATIONS_V2_AUTH_USER_HEADER", "X-Remote-User")
+    monkeypatch.setenv("ANNOTATIONS_V2_AUTH_REQUIRED", "1")
+    try:
+        task = annotations_v2_app.store.create_task(
+            {"root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)}
+        )
+        client = annotations_v2_app.app.test_client()
+        missing = client.post(
+            f"/api/tasks/{task['id']}/items/0/rough",
+            json={"username": "spoofed", "mos": 5, "has_defect": False},
+        )
+        trusted = client.post(
+            f"/api/tasks/{task['id']}/items/0/rough",
+            headers={"X-Remote-User": "alice"},
+            json={"username": "spoofed", "mos": 5, "has_defect": False},
+        )
+        session = client.get("/api/session", headers={"X-Remote-User": "alice"})
+
+        assert missing.status_code == 403
+        assert trusted.status_code == 200
+        assert trusted.get_json()["record"]["username"] == "alice"
+        assert session.get_json()["username"] == "alice"
+    finally:
+        annotations_v2_app.store = old_store
+        annotations_v2_app.app.config.update(PROPAGATE_EXCEPTIONS=None)
+
+
 def test_v2_stage_items_api_supports_offset_limit_paging():
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
@@ -2518,8 +3023,9 @@ def test_v2_update_task_api_refreshes_stage_configuration():
 
         response = client.patch(
             f"/api/tasks/{task['id']}",
-            json={
-                "issue_options": ["颜色问题"],
+                json={
+                    "username": "孙本猿",
+                    "issue_options": ["颜色问题"],
                 "selected_label_paths": [["输出图", "景别"]],
             },
         )
@@ -2981,7 +3487,7 @@ def test_v2_frontend_preloads_rate_neighbors_but_not_visualization_result_pages(
 def test_v2_frontend_pages_rate_items_instead_of_loading_full_stage():
     script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert "const RATE_PAGE_SIZE = 1;" in script
+    assert "const RATE_PAGE_SIZE = 4;" in script
     assert "async function loadRateItemPage(offset = 0)" in script
     assert "limit: RATE_PAGE_SIZE," in script
     assert "state.rateTotal = Number(data.total || 0);" in script
@@ -2989,6 +3495,14 @@ def test_v2_frontend_pages_rate_items_instead_of_loading_full_stage():
     assert "await loadRateItemPage(state.rateOffset);" in script
     assert "state.items = data.items || [];" in script
     assert "const data = await api(stageItemsUrl(taskId, stage, true));" not in script
+
+
+def test_v2_frontend_refreshes_only_stale_summaries_with_bounded_concurrency():
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "async function refreshTaskSummaries()" in script
+    assert "state.tasks.filter((task) => task.summary?.stale !== false)" in script
+    assert "Math.min(2, pending.length)" in script
 
 
 def test_v2_frontend_renders_collapsed_generation_prompt_markdown_below_images():
@@ -3058,7 +3572,8 @@ def test_v2_frontend_links_and_renders_unified_visualization_page():
     assert "/api/tasks/${state.taskId}/visualization-results?" not in script
     assert "renderUnifiedResultPanel" in script
     assert "beginVisualizationLabelEdit" in script
-    assert "saveVisualizationLabels" in script
+    assert "saveVisualizationLabelPath" in script
+    assert "base_revision: (item.label_revisions || []).length" in script
     assert "/api/tasks/${state.taskId}/results/${item.item_index}/labels" in script
     assert "renderScreeningVisualization" not in script
     assert "renderSampleVisualization" not in script
@@ -3189,7 +3704,8 @@ def test_v2_frontend_exposes_preview_cache_action():
 
     assert 'data-action="cache-previews"' in script
     assert "async function warmPreviewCache" in script
-    assert 'api(`/api/tasks/${taskId}/preview-cache/jobs`, { method: "POST" })' in script
+    assert 'api(`/api/tasks/${taskId}/preview-cache/jobs`, {' in script
+    assert 'body: JSON.stringify({ username: state.username })' in script
     assert 'api(`/api/tasks/${taskId}/preview-cache/jobs/${jobId}`)' in script
     assert 'if (action === "cache-previews") warmPreviewCache(taskId, target)' in script
     assert "缓存图片" in script

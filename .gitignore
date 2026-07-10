@@ -36,3 +36,5 @@ annotations_test_tmp/
 tests/_scratch*/
 web/annotations/data/
 web/annotations_v2/data/**/preview_cache/
+web/annotations_v2/data/**/*.lock
+web/annotations_v2/data/**/records-cache.sqlite3*

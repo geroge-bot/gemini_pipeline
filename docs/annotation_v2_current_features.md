@@ -14,7 +14,7 @@ annotations v2 是独立于旧版 `web/annotations` 的本地 Flask 标注工作
 6. 导入外部标注结果，导出最终 JSONL。
 7. 按阶段查看、筛选和复查结果。
 
-v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每个任务的条目写入 `items.json`，阶段记录写入 `records.json` 或 `records/*.json.gz` 分片，任务进度快照写入 `summary.json`。不依赖数据库。
+v2 的持久格式仍是本地文件：全局任务列表写入 `state.json`，每个任务的条目写入 `items.json`，阶段记录写入 `records.json` 或 `records/*.json.gz` 分片，任务进度快照写入 `summary.json`。运行时会维护可丢弃的 WAL 模式 `records-cache.sqlite3` 读取缓存；gzip/JSON 仍是兼容性数据源，文件签名不一致时 SQLite 缓存会自动重建。可通过 `ANNOTATIONS_V2_SQLITE_RECORD_CACHE=0` 禁用。
 
 ## 2. 任务与配置
 
@@ -78,12 +78,14 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 
 ## 3. 用户与任务列表
 
-所有页面都有登录态入口。用户名保存在浏览器 `localStorage` 的 `annotations_v2.username` 中。系统没有密码或服务端鉴权，用户名主要用于：
+所有页面都有登录态入口。用户名保存在浏览器 `localStorage` 的 `annotations_v2.username` 中。本地可信模式不要求密码；远程部署可配置 `ANNOTATIONS_V2_AUTH_USER_HEADER` 和 `ANNOTATIONS_V2_AUTH_REQUIRED=1`，由认证反向代理注入可信身份并覆盖客户端提交的用户名。用户名主要用于：
 
 - 区分粗筛/精筛多标注人记录。
 - 分配标签纠错队列。
 - 标记导出结果中的标注者。
 - 控制任务删除权限。
+
+创建、编辑、删除、导入、采样和生成预览缓存都属于任务管理操作，仅允许任务管理员执行。
 
 首页任务列表展示每个任务的阶段进度：
 
@@ -93,7 +95,7 @@ v2 仍采用本地文件持久化：全局任务列表写入 `state.json`，每�
 - 采样数。
 - 标签纠错完成数。
 
-任务列表接口 `/api/tasks` 读取每个任务的 `summary.json` 快照，不在首屏同步全量扫描 `items.json` 和 records。首页会先显示快照，再异步请求 `/api/tasks/<task_id>/summary` 刷新进度；刷新后的 summary 会回写 `summary.json`。保存单条标注时只把快照标记为 `stale`，避免“保存并进入下一条”的高频链路被全量统计阻塞。导入和采样这类本来就会批量扫描的操作会同步刷新 summary 快照。
+任务列表接口 `/api/tasks` 读取每个任务的 `summary.json` 快照，不在首屏同步全量扫描 `items.json` 和 records。首页会先显示快照，只对 `stale=true` 的任务异步请求 `/api/tasks/<task_id>/summary`，并限制为最多 2 个并发刷新；刷新后的 summary 会回写 `summary.json`。同一任务的重复 summary 请求会在任务事务锁内合并，已经是最新状态时直接返回快照。保存单条标注时只把快照标记为 `stale`，避免“保存并进入下一条”的高频链路被全量统计阻塞。导入和采样这类本来就会批量扫描的操作会同步刷新 summary 快照。
 
 进度卡片可直接进入对应阶段页面。任务卡片还提供：
 
@@ -445,11 +447,12 @@ python scripts/import_annotations_v2_rough_jsonl.py \
 - 接口：`POST /api/tasks/<task_id>/preview-cache/jobs`。
 - 查询：`GET /api/tasks/<task_id>/preview-cache/jobs/<job_id>`。
 - 同一任务已有运行中任务时，会复用当前 job，不重复启动。
-- 后端使用 16 个 worker 线程并发处理预览。
+- 后端默认使用 4 个 worker 线程并发处理预览，可通过 `ANNOTATIONS_V2_PREVIEW_CACHE_WORKERS` 调整。
 - 处理对象为每条数据的原图和目标图。
 - 重复图片路径会去重处理，但统计中保留引用数。
 - 进度会返回百分比、状态、消息、结果和错误。
 - 缓存状态也会写入 `cache_status.json`。
+- 每个 job 的状态会持久化到 `preview_cache/jobs/<job_id>.json`，不同 WSGI worker 可以继续查询同一 job。
 
 ### 11.4 前端预加载
 
@@ -459,7 +462,7 @@ python scripts/import_annotations_v2_rough_jsonl.py \
 - `decoding = async`。
 - `fetchPriority = high`。
 
-标注页会预加载当前项之后 3 条的原图和目标图。预加载图片保存在内存 `Map` 中，最多保留 48 张，超过后移除最早记录。结果页不再通过额外 `/results` 请求预加载后 3 页，避免首屏后立即触发多次全量结果扫描。
+标注页的阶段接口一次返回 4 条，页面展示当前项并预加载之后 3 条的原图和目标图。预加载图片保存在内存 `Map` 中，最多保留 48 张，超过后移除最早记录。结果页不再通过额外 `/results` 请求预加载后 3 页，避免首屏后立即触发多次全量结果扫描。
 
 ## 12. 加载速度与响应需求
 
@@ -525,6 +528,7 @@ python scripts/import_annotations_v2_rough_jsonl.py \
 ### 12.8 性能观测
 
 - 所有 Flask 请求会记录总耗时，并在响应头返回 `X-Annotation-Elapsed-Ms`。
+- 默认日志级别为 `INFO`，可通过 `ANNOTATIONS_V2_LOG_LEVEL` 调整。
 - `annotations_v2.performance` logger 会输出 summary 分段：`summary.read_items`、`summary.read_records`、`summary.calculate`、`summary.total`。
 - 阶段分页会输出：`items_page.read_records`、`items_page.read_items`、`items_page.filter_sort`、`items_page.payload`、`items_page.total`。
 - 结果分页会输出：`results.items_reference`、`results.read_records`、`results.filter_scan`、`results.payload`、`results.total`。

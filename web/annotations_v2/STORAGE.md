@@ -10,8 +10,12 @@ Each task has an independent data directory:
 data/tasks/<task_id>/
   items.json
   issues.json
+  summary.json
+  records-cache.sqlite3
   records/
     <item_index>.json.gz
+  preview_cache/jobs/
+    <job_id>.json
 ```
 
 `state.json` stores task metadata and points each task at its `data_dir`.
@@ -43,6 +47,12 @@ Typical fields are:
 - temporary `label_claim`
 
 Bulk operations such as sampling and JSONL import may update multiple item record files.
+
+## `records-cache.sqlite3`
+
+The gzip shards remain the durable compatibility format. `records-cache.sqlite3` is a disposable WAL-mode read-through cache of the merged legacy/sharded record view. Its metadata stores the source filesystem signature; a mismatch causes the cache to be rebuilt from the JSON/gzip files. This avoids reopening thousands of gzip files after every process restart while preserving compatibility with existing tasks and scripts.
+
+Set `ANNOTATIONS_V2_SQLITE_RECORD_CACHE=0` to disable this cache. Keep it on local storage; do not place it on NFS.
 
 ## `issues.json`
 
@@ -80,6 +90,12 @@ New saves are written to `records/<item_index>.json.gz`; they do not rewrite `re
 
 ## Concurrency
 
-Per-item saves lock the target item record file. Saves to different items can proceed without rewriting a shared task-wide JSON file.
+All read-modify-write operations use stable sidecar lock files plus OS-level advisory locks. The locks are shared by threads and by WSGI worker processes on the same server.
 
-Task-wide operations still read all records and write the affected item files. They should remain administrative or lower-frequency operations compared with normal annotation saves.
+Every mutation for one task first acquires the task mutation lock. Per-item saves then lock the target record. Bulk operations, label claims, imports, sampling, and summary refresh therefore cannot write stale snapshots over normal annotation saves.
+
+Bulk operations write only item indexes whose content actually changed. Label claim creation normally writes one gzip shard rather than rewriting every record in the task.
+
+Preview-cache job state is persisted under `preview_cache/jobs/`, so polling can be served by a different WSGI worker from the worker that started the background job.
+
+These locks are intended for multiple processes on one server with local storage. For multiple application servers or storage whose advisory-lock semantics are uncertain, use a transactional database rather than relying on shared JSON files.
