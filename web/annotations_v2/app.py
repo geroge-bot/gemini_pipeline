@@ -33,7 +33,7 @@ PREVIEW_CACHE_DIR_ENV = "ANNOTATIONS_V2_PREVIEW_CACHE_DIR"
 INPUT_GROUP_NAME = "输入图"
 OUTPUT_GROUP_NAME = "输出图"
 VALID_VISUALIZATION_STAGES = {"rough", "fine", "sample", "label"}
-TASK_DELETE_ADMIN_USERNAME = "孙本猿"
+TASK_ADMIN_USERNAME = "孙本猿"
 LABEL_CLAIM_TTL_SECONDS = 30 * 60
 RECORD_GZIP_COMPRESSLEVEL = 3
 PERF_LOGGER = logging.getLogger("annotations_v2.performance")
@@ -533,10 +533,10 @@ def cached_resized_image_file(path: Path, cache_dir: Path, max_edge: int = IMAGE
     return cached_path.resolve(), mimetypes.guess_type(str(cached_path))[0] or mimetype
 
 
-def require_task_delete_admin(payload: dict[str, Any]) -> None:
+def require_task_admin(payload: dict[str, Any], action: str = "管理任务") -> None:
     username = str(payload.get("username") or "").strip()
-    if username != TASK_DELETE_ADMIN_USERNAME:
-        raise PermissionError(f"只有{TASK_DELETE_ADMIN_USERNAME}可以删除任务")
+    if username != TASK_ADMIN_USERNAME:
+        raise PermissionError(f"只有{TASK_ADMIN_USERNAME}可以{action}")
 
 
 class AnnotationV2Store:
@@ -3027,7 +3027,9 @@ def api_task(task_id: str):
 
 @app.post("/api/tasks")
 def api_create_task():
-    task = store.create_task(request.get_json(force=True) or {})
+    payload = request.get_json(force=True) or {}
+    require_task_admin(payload)
+    task = store.create_task(payload)
     return jsonify({"task": task}), 201
 
 
@@ -3055,7 +3057,7 @@ def api_get_preview_cache_job(task_id: str, job_id: str):
 @app.delete("/api/tasks/<task_id>")
 def api_delete_task(task_id: str):
     payload = request.get_json(silent=True) or {}
-    require_task_delete_admin(payload)
+    require_task_admin(payload, "删除任务")
     return jsonify({"task": store.delete_task(task_id)})
 
 

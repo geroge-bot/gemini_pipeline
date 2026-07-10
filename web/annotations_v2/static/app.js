@@ -23,7 +23,7 @@ const state = {
   sampleCandidateCount: 0,
 };
 
-const TASK_DELETE_ADMIN_USERNAME = "孙本猿";
+const TASK_ADMIN_USERNAME = "孙本猿";
 const RATE_PAGE_SIZE = 1;
 const PRELOAD_FORWARD_PAGES = 3;
 const MAX_PRELOADED_IMAGES = 48;
@@ -165,6 +165,18 @@ function renderVisualizationImagePrompt(item) {
 function updateSession() {
   if ($("loginUsernameInput")) $("loginUsernameInput").value = state.username;
   $("sessionLine").textContent = state.username ? `当前用户：${state.username}` : "未登录";
+  updateTaskManagementVisibility();
+}
+
+function canManageTasks() {
+  return state.username === TASK_ADMIN_USERNAME;
+}
+
+function updateTaskManagementVisibility() {
+  const form = $("createTaskForm");
+  if (!form) return;
+  form.classList.toggle("hidden", !canManageTasks());
+  form.closest(".layout")?.classList.toggle("taskManagementRestricted", !canManageTasks());
 }
 
 function showLogin() {
@@ -296,12 +308,8 @@ function renderTasks() {
   }
 }
 
-function canDeleteTasks() {
-  return state.username === TASK_DELETE_ADMIN_USERNAME;
-}
-
 function deleteTaskButton(task) {
-  if (!canDeleteTasks()) return "";
+  if (!canManageTasks()) return "";
   return `<button class="dangerGhost" data-action="delete" data-id="${task.id}" data-name="${escapeHtml(task.name)}" type="button">删除</button>`;
 }
 
@@ -337,6 +345,7 @@ async function createTask(event) {
   event.preventDefault();
   const payload = {
     name: $("taskNameInput").value.trim(),
+    username: state.username,
     root_dir: $("rootDirInput").value.trim(),
     jsonl_path: $("jsonlPathInput").value.trim(),
     label_dir: $("labelDirInput").value.trim(),

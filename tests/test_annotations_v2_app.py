@@ -1865,7 +1865,12 @@ def test_v2_visualization_results_api_pages_stage_rows():
         client = annotations_v2_app.app.test_client()
         task = client.post(
             "/api/tasks",
-            json={"name": "api visualize", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)},
+            json={
+                "name": "api visualize",
+                "root_dir": str(tmp_path),
+                "jsonl_path": str(jsonl_path),
+                "username": "孙本猿",
+            },
         ).get_json()["task"]
         client.post(f"/api/tasks/{task['id']}/items/0/rough", json={"username": "alice", "mos": 5, "has_defect": False})
 
@@ -2361,6 +2366,7 @@ def test_v2_api_exposes_summary_and_stage_endpoints():
                 "root_dir": str(tmp_path),
                 "jsonl_path": str(jsonl_path),
                 "selected_label_paths": [["输入图", "菜品种类"]],
+                "username": "孙本猿",
             },
         )
         task = create_response.get_json()["task"]
@@ -2563,6 +2569,34 @@ def test_v2_delete_task_api_requires_admin_username_and_unregisters_only():
         annotations_v2_app.app.config.update(PROPAGATE_EXCEPTIONS=None)
 
 
+def test_v2_create_task_api_requires_admin_username():
+    from web.annotations_v2 import app as annotations_v2_app
+    from web.annotations_v2.app import AnnotationV2Store
+
+    tmp_path = make_workspace_tmp()
+    jsonl_path = tmp_path / "data.jsonl"
+    write_jsonl(jsonl_path, [{"src_image": "src/a.jpg", "dst_image": "dst/a.jpg"}])
+
+    old_store = annotations_v2_app.store
+    annotations_v2_app.store = AnnotationV2Store(tmp_path / "state.json")
+    annotations_v2_app.app.config.update(TESTING=True, PROPAGATE_EXCEPTIONS=False)
+    try:
+        client = annotations_v2_app.app.test_client()
+        base_payload = {"name": "api create", "root_dir": str(tmp_path), "jsonl_path": str(jsonl_path)}
+
+        forbidden_response = client.post("/api/tasks", json={**base_payload, "username": "alice"})
+        allowed_response = client.post("/api/tasks", json={**base_payload, "username": "孙本猿"})
+
+        assert forbidden_response.status_code == 403
+        assert forbidden_response.get_json()["error"] == "只有孙本猿可以管理任务"
+        assert allowed_response.status_code == 201
+        assert allowed_response.get_json()["task"]["name"] == "api create"
+        assert len(annotations_v2_app.store.list_tasks()) == 1
+    finally:
+        annotations_v2_app.store = old_store
+        annotations_v2_app.app.config.update(PROPAGATE_EXCEPTIONS=None)
+
+
 def test_v2_create_task_reports_missing_jsonl_as_bad_request():
     from web.annotations_v2 import app as annotations_v2_app
     from web.annotations_v2.app import AnnotationV2Store
@@ -2580,6 +2614,7 @@ def test_v2_create_task_reports_missing_jsonl_as_bad_request():
                 "name": "missing file",
                 "root_dir": str(tmp_path),
                 "jsonl_path": str(tmp_path / "missing.jsonl"),
+                "username": "孙本猿",
             },
         )
 
@@ -2614,6 +2649,7 @@ def test_v2_create_task_reports_invalid_label_json_as_bad_request():
                 "root_dir": str(tmp_path),
                 "jsonl_path": str(jsonl_path),
                 "label_dir": str(label_dir),
+                "username": "孙本猿",
             },
         )
 
@@ -2898,6 +2934,21 @@ def test_v2_frontend_supports_multi_annotator_assignment_and_round_progress():
     assert "goToItem(state.index - 1)" in script
     assert "await saveCurrentStageBeforePageChange()" in script
     assert "请选择 MOS 分后再翻页" in script
+
+
+def test_v2_frontend_hides_task_creation_for_non_admin_users():
+    index_template = (PROJECT_ROOT / "web" / "annotations_v2" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "web" / "annotations_v2" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="createTaskForm"' in index_template
+    assert 'const TASK_ADMIN_USERNAME = "孙本猿";' in script
+    assert "function canManageTasks()" in script
+    assert "return state.username === TASK_ADMIN_USERNAME;" in script
+    assert "function updateTaskManagementVisibility()" in script
+    assert 'form.classList.toggle("hidden", !canManageTasks());' in script
+    assert "updateTaskManagementVisibility();" in script
+    assert 'if (!canManageTasks()) return "";' in script
+    assert "username: state.username" in script
 
 
 def test_v2_fine_form_defaults_to_rough_result_for_fast_acceptance():

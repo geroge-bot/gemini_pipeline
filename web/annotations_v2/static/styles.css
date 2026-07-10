@@ -139,6 +139,10 @@ main {
   align-items: start;
 }
 
+.layout.taskManagementRestricted {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .panel {
   border: 1px solid var(--line);
   border-radius: 8px;
