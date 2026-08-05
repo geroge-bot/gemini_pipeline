@@ -3,6 +3,7 @@ import random
 from typing import List, Dict, Any, Optional, Tuple
 
 from pipeline.interfaces import PipelineModule, PipelineContext
+from pipeline.modules.prompt_backup import food_prompt_0722
 from pipeline.utils.api_client import GeminiAPIClient
 from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.file_ops import image_to_base64
@@ -47,7 +48,7 @@ def _build_question_prompt(persona: str, img_a_b64: str, img_b_b64: str) -> List
     ]
 
 
-def _build_answer_prompt(
+def _build_legacy_answer_prompt(
     persona: str, question: str, img_a_b64: str, img_b_b64: str
 ) -> List[Dict[str, Any]]:
     """
@@ -108,6 +109,39 @@ def _build_answer_prompt(
     ]
 
 
+# Keep named prompt versions so experiments can be reproduced without replacing
+# the previous production prompt.
+LEGACY_ANSWER_PROMPT = _build_legacy_answer_prompt("", "", "", "")[0]["content"]
+ANSWER_PROMPTS = {
+    "food_legacy": LEGACY_ANSWER_PROMPT,
+    "food_0722": food_prompt_0722.strip(),
+}
+DEFAULT_ANSWER_PROMPT_KEY = "food_0722"
+
+
+def _build_answer_prompt(
+    persona: str,
+    question: str,
+    img_a_b64: str,
+    img_b_b64: str,
+    answer_prompt_key: str = DEFAULT_ANSWER_PROMPT_KEY,
+) -> List[Dict[str, Any]]:
+    """Build answer messages with a managed, named system-prompt version."""
+    try:
+        answer_prompt = ANSWER_PROMPTS[answer_prompt_key]
+    except KeyError as exc:
+        available = ", ".join(sorted(ANSWER_PROMPTS))
+        raise ValueError(
+            f"Unknown answer prompt '{answer_prompt_key}'. Available: {available}"
+        ) from exc
+
+    messages = _build_legacy_answer_prompt(
+        persona, question, img_a_b64, img_b_b64
+    )
+    messages[0]["content"] = answer_prompt
+    return messages
+
+
 def _strip_images_from_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     从 messages 列表中移除 base64 图片数据，仅保留文本内容，
@@ -145,12 +179,23 @@ class DescriptionModule(PipelineModule):
       3. Record & return the full conversation history of both steps.
     """
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        answer_prompt_key: str = DEFAULT_ANSWER_PROMPT_KEY,
+    ):
         """
         Args:
             model: Model name for text generation (defaults to config.model_analysis).
+            answer_prompt_key: Named answer prompt version from ``ANSWER_PROMPTS``.
         """
+        if answer_prompt_key not in ANSWER_PROMPTS:
+            available = ", ".join(sorted(ANSWER_PROMPTS))
+            raise ValueError(
+                f"Unknown answer prompt '{answer_prompt_key}'. Available: {available}"
+            )
         self.model_override = model
+        self.answer_prompt_key = answer_prompt_key
 
     def _get_model(self, context: PipelineContext) -> str:
         return self.model_override or context.config.model_analysis
@@ -198,7 +243,13 @@ class DescriptionModule(PipelineModule):
         Returns:
             (answer_text, prompt2_messages)
         """
-        prompt2_messages = _build_answer_prompt(persona, question, img_a_b64, img_b_b64)
+        prompt2_messages = _build_answer_prompt(
+            persona,
+            question,
+            img_a_b64,
+            img_b_b64,
+            answer_prompt_key=self.answer_prompt_key,
+        )
         answer = client.generate_with_messages(
             messages=prompt2_messages,
             model=model,
@@ -252,6 +303,7 @@ class DescriptionModule(PipelineModule):
 
                 # ===== 存储到 result =====
                 result.description = {
+                    "answer_prompt_key": self.answer_prompt_key,
                     "persona": persona,
                     "question": question,
                     "answer": answer,

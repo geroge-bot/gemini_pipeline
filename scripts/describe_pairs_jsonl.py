@@ -12,7 +12,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.config import DEFAULT_MODEL_ANALYSIS, DEFAULT_SERVICE_TEXT
-from pipeline.modules.description import DescriptionModule, _strip_images_from_messages
+from pipeline.modules.description import (
+    ANSWER_PROMPTS,
+    DEFAULT_ANSWER_PROMPT_KEY,
+    DescriptionModule,
+    _strip_images_from_messages,
+)
 from pipeline.utils.api_usage_logger import log_result_saved
 from pipeline.utils.client_factory import create_client_from_service
 from pipeline.utils.file_ops import image_to_base64
@@ -23,7 +28,10 @@ PairDescriber = Callable[[Path, Path], dict]
 
 
 def _path_from_record(value: str | Path) -> Path:
-    return value if isinstance(value, Path) else Path(value)
+    if isinstance(value, Path):
+        return value
+    # JSONL files are often exported on Windows and then tested on macOS/Linux.
+    return Path(value.replace("\\", "/"))
 
 
 def _resolve_input_path(input_root: Path, value: str | Path) -> Path:
@@ -34,6 +42,9 @@ def _resolve_input_path(input_root: Path, value: str | Path) -> Path:
 
 
 def get_output_json_path(output_dir: str | Path, generated_relative_path: str | Path) -> Path:
+    if isinstance(generated_relative_path, Path) and "\\" in str(generated_relative_path):
+        parent, _, name = str(generated_relative_path).rpartition("\\")
+        return Path(output_dir) / parent / Path(name).with_suffix(".json")
     generated_relative_path = _path_from_record(generated_relative_path)
     return Path(output_dir) / generated_relative_path.with_suffix(".json")
 
@@ -58,8 +69,9 @@ def describe_pair_with_module(
     *,
     client,
     model: str,
+    answer_prompt_key: str = DEFAULT_ANSWER_PROMPT_KEY,
 ) -> dict:
-    module = DescriptionModule(model=model)
+    module = DescriptionModule(model=model, answer_prompt_key=answer_prompt_key)
     orig_b64 = image_to_base64(str(original_path))
     gen_b64 = image_to_base64(str(generated_path))
 
@@ -76,6 +88,7 @@ def describe_pair_with_module(
     conversation_history.append({"role": "assistant", "content": answer})
 
     return {
+        "answer_prompt_key": module.answer_prompt_key,
         "persona": persona,
         "question": question,
         "answer": answer,
@@ -91,6 +104,8 @@ def describe_pairs_jsonl(
     describe_func: PairDescriber,
     overwrite: bool = False,
     limit: int | None = None,
+    sample_size: int | None = None,
+    random_seed: int = 42,
     delay_seconds: float = 0.0,
     max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> dict[str, int]:
@@ -100,6 +115,9 @@ def describe_pairs_jsonl(
 
     stats = {"processed": 0, "skipped": 0, "failed": 0}
     max_workers = max(1, max_workers)
+
+    if limit is not None and sample_size is not None:
+        raise ValueError("limit and sample_size cannot be used together")
 
     pending_records: list[tuple[int, int, str, str, Path, Path, Path]] = []
     for index, (line_no, record) in enumerate(iter_jsonl_records(jsonl_path), 1):
@@ -123,6 +141,12 @@ def describe_pairs_jsonl(
         except Exception as exc:
             print(f"[{index}] [ERROR] line={line_no}: {exc}")
             stats["failed"] += 1
+
+    if sample_size is not None:
+        sample_size = max(0, sample_size)
+        pending_records = random.Random(random_seed).sample(
+            pending_records, min(sample_size, len(pending_records))
+        )
 
     def run_one(
         *,
@@ -216,6 +240,18 @@ def main() -> None:
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing output JSON files.")
     parser.add_argument("--limit", type=int, default=None, help="Process at most N new records.")
     parser.add_argument(
+        "--sample_size",
+        type=int,
+        default=None,
+        help="Randomly sample N pending records before processing.",
+    )
+    parser.add_argument(
+        "--answer_prompt",
+        choices=sorted(ANSWER_PROMPTS),
+        default=DEFAULT_ANSWER_PROMPT_KEY,
+        help="Named answer prompt version.",
+    )
+    parser.add_argument(
         "--max_workers",
         type=int,
         default=DEFAULT_MAX_WORKERS,
@@ -239,6 +275,7 @@ def main() -> None:
             generated_path,
             client=client,
             model=args.model,
+            answer_prompt_key=args.answer_prompt,
         )
     describe_func.api_client = client
 
@@ -249,6 +286,8 @@ def main() -> None:
         describe_func=describe_func,
         overwrite=args.overwrite,
         limit=args.limit,
+        sample_size=args.sample_size,
+        random_seed=args.random_seed,
         delay_seconds=args.delay_seconds,
         max_workers=args.max_workers,
     )

@@ -9,6 +9,22 @@ from scripts.describe_pairs_jsonl import (
     describe_pairs_jsonl,
     get_output_json_path,
 )
+from pipeline.modules.description import (
+    ANSWER_PROMPTS,
+    DEFAULT_ANSWER_PROMPT_KEY,
+    DescriptionModule,
+    _build_answer_prompt,
+)
+from pipeline.modules.prompt_backup import food_prompt_0722
+
+
+def test_food_0722_is_default_and_legacy_prompt_is_retained() -> None:
+    messages = _build_answer_prompt("persona", "question", "a", "b")
+
+    assert DEFAULT_ANSWER_PROMPT_KEY == "food_0722"
+    assert set(ANSWER_PROMPTS) == {"food_legacy", "food_0722"}
+    assert messages[0]["content"] == food_prompt_0722.strip()
+    assert DescriptionModule(answer_prompt_key="food_legacy").answer_prompt_key == "food_legacy"
 
 
 def test_get_output_json_path_preserves_generated_relative_path() -> None:
@@ -146,6 +162,48 @@ def test_describe_pairs_jsonl_uses_parallel_workers() -> None:
         assert stats == {"processed": 3, "skipped": 0, "failed": 0}
         assert max_running >= 2
         assert DEFAULT_MAX_WORKERS == 50
+    finally:
+        if scratch.exists():
+            shutil.rmtree(scratch)
+
+
+def test_describe_pairs_jsonl_randomly_samples_reproducibly() -> None:
+    scratch = Path(__file__).resolve().parent / "_scratch_describe_pairs_sample"
+    if scratch.exists():
+        shutil.rmtree(scratch)
+
+    try:
+        data_root = scratch / "data"
+        output_dir = scratch / "labels"
+        jsonl_path = data_root / "data.jsonl"
+        data_root.mkdir(parents=True)
+        records = [
+            {"src_image": f"src/{idx}.jpg", "dst_image": f"dst/{idx}.jpg"}
+            for idx in range(10)
+        ]
+        jsonl_path.write_text(
+            "\n".join(json.dumps(record) for record in records) + "\n",
+            encoding="utf-8",
+        )
+
+        seen: list[str] = []
+
+        def fake_describer(original_path: Path, generated_path: Path) -> dict:
+            seen.append(generated_path.name)
+            return {"answer": "{}"}
+
+        stats = describe_pairs_jsonl(
+            jsonl_path=jsonl_path,
+            output_dir=output_dir,
+            input_root=data_root,
+            describe_func=fake_describer,
+            sample_size=3,
+            random_seed=7,
+            max_workers=1,
+        )
+
+        assert stats == {"processed": 3, "skipped": 0, "failed": 0}
+        assert seen == ["5.jpg", "2.jpg", "6.jpg"]
     finally:
         if scratch.exists():
             shutil.rmtree(scratch)
